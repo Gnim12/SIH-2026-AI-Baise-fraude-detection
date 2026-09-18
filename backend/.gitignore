@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local dev-box config overrides (e.g. SCREENING_OCR_BUDGET_MS tuned for
+# this machine's hardware) -- not a production value, never committed.
+.env
+
+# Model weights: fetched once (see app/ocr/viz.py MODEL DOWNLOAD NOTE),
+# verified against models/manifest.json, never committed.
+models/**/*.onnx
+models/**/*.onnx.sha256
+models/**/*.pt
+
+_selftest_ckpt/

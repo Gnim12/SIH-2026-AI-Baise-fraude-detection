@@ -1,0 +1,235 @@
+"""Synthetic MRZ generator + print-scan degradation.
+
+Generates random, entirely fictional TD3 (passport) records with internally
+consistent ICAO 9303 check digits, renders them as OCR-B-ish monospace text
+images, and applies a print-scan degradation pipeline (blur, noise, contrast,
+slight skew, resample) so the CRNN in model.py has training data that looks
+like a scanned document rather than clean rendered text.
+
+No real or scraped identity data is used anywhere here — names are random
+letter sequences, not drawn from any real-name corpus.
+"""
+from __future__ import annotations
+
+import io
+import random
+from dataclasses import dataclass, field
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+
+from . import spec
+
+_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_DIGITS = "0123456789"
+# A pool of ISO-3166-1 alpha-3-shaped codes. These are not curated against the
+# real registry -- they only need to be 3 letters for MRZ layout purposes.
+_COUNTRY_POOL = ["UTO", "ZZA", "XKX", "TST", "QAX", "FAK", "SYN", "DEM"]
+
+
+def _rand_letters(rng: random.Random, min_len: int, max_len: int) -> str:
+    n = rng.randint(min_len, max_len)
+    return "".join(rng.choice(_ALPHA) for _ in range(n))
+
+
+def _rand_digits(rng: random.Random, n: int) -> str:
+    return "".join(rng.choice(_DIGITS) for _ in range(n))
+
+
+def _rand_doc_number(rng: random.Random) -> str:
+    n = rng.randint(6, 9)
+    body = "".join(rng.choice(_ALPHA + _DIGITS) for _ in range(n))
+    return body.ljust(9, spec.FILLER)
+
+
+def _rand_date(rng: random.Random, *, year_lo: int, year_hi: int) -> str:
+    year = rng.randint(year_lo, year_hi)
+    month = rng.randint(1, 12)
+    day = rng.randint(1, 28)  # avoid month-length edge cases in synthetic data
+    return f"{year % 100:02d}{month:02d}{day:02d}"
+
+
+@dataclass
+class SyntheticRecord:
+    surname: str
+    given_names: str
+    doc_number: str
+    nationality: str
+    issuing_country: str
+    birth_date_raw: str
+    expiry_date_raw: str
+    sex: str
+    personal_number: str
+    lines: list[str] = field(default_factory=list)
+
+
+def _name_field(surname: str, given_names: str, width: int) -> str:
+    raw = surname.replace(" ", "<") + "<<" + given_names.replace(" ", "<")
+    if len(raw) > width:
+        raw = raw[:width]
+    return raw.ljust(width, spec.FILLER)
+
+
+def build_td3_record(
+    *,
+    surname: str,
+    given_names: str,
+    doc_number: str,
+    nationality: str,
+    issuing_country: str,
+    birth_raw: str,
+    expiry_raw: str,
+    sex: str,
+    personal_number: str = "",
+) -> SyntheticRecord:
+    """Deterministically build one internally-consistent TD3 record from
+    explicit field values, computing every check digit. Used both by
+    `generate_record` (random inputs) and directly by tests that need exact
+    control over field values."""
+    doc_number = doc_number.ljust(9, spec.FILLER)
+    personal_number = personal_number.ljust(14, spec.FILLER)
+
+    l1 = "P<" + issuing_country + _name_field(surname, given_names, 39)
+    assert len(l1) == 44
+
+    doc_cd = spec.check_digit_char(doc_number)
+    birth_cd = spec.check_digit_char(birth_raw)
+    expiry_cd = spec.check_digit_char(expiry_raw)
+    personal_cd = spec.check_digit_char(personal_number)
+    composite_input = (
+        doc_number + doc_cd + birth_raw + birth_cd + expiry_raw + expiry_cd + personal_number + personal_cd
+    )
+    composite_cd = spec.check_digit_char(composite_input)
+
+    l2 = (
+        doc_number + doc_cd + nationality + birth_raw + birth_cd + sex
+        + expiry_raw + expiry_cd + personal_number + personal_cd + composite_cd
+    )
+    assert len(l2) == 44
+
+    return SyntheticRecord(
+        surname=surname,
+        given_names=given_names.replace(" ", "<"),
+        doc_number=doc_number.rstrip(spec.FILLER),
+        nationality=nationality,
+        issuing_country=issuing_country,
+        birth_date_raw=birth_raw,
+        expiry_date_raw=expiry_raw,
+        sex=sex,
+        personal_number=personal_number.rstrip(spec.FILLER),
+        lines=[l1, l2],
+    )
+
+
+def generate_record(rng: random.Random) -> SyntheticRecord:
+    """Build one internally-consistent, fictional TD3 MRZ record with
+    randomised field values."""
+    surname = _rand_letters(rng, 3, 10)
+    given_names = _rand_letters(rng, 3, 10) + (
+        " " + _rand_letters(rng, 3, 8) if rng.random() < 0.3 else ""
+    )
+    doc_number = _rand_doc_number(rng)
+    nationality = rng.choice(_COUNTRY_POOL)
+    sex = rng.choice("MF")
+    birth_raw = _rand_date(rng, year_lo=1950, year_hi=2010)
+    expiry_raw = _rand_date(rng, year_lo=2024, year_hi=2033)
+    personal_number = "" if rng.random() < 0.6 else _rand_digits(rng, rng.randint(4, 14))
+
+    return build_td3_record(
+        surname=surname, given_names=given_names, doc_number=doc_number,
+        nationality=nationality, issuing_country=nationality,
+        birth_raw=birth_raw, expiry_raw=expiry_raw, sex=sex,
+        personal_number=personal_number,
+    )
+
+
+def _load_mono_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    for candidate in ("consola.ttf", "cour.ttf", "DejaVuSansMono.ttf"):
+        try:
+            return ImageFont.truetype(candidate, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def render_mrz_lines(lines: list[str], *, char_w: int = 16, char_h: int = 28) -> np.ndarray:
+    """Render MRZ lines as a single grayscale image, one row of monospace text per line."""
+    width = max(len(l) for l in lines) * char_w
+    height = len(lines) * char_h
+    img = Image.new("L", (width, height), color=255)
+    draw = ImageDraw.Draw(img)
+    font = _load_mono_font(int(char_h * 0.8))
+    for i, line in enumerate(lines):
+        draw.text((2, i * char_h + 2), line, fill=0, font=font)
+    return np.array(img)
+
+
+def degrade(image: np.ndarray, rng: random.Random, *, severity: float = 0.5) -> np.ndarray:
+    """Print-scan style degradation: blur, noise, contrast/brightness jitter,
+    slight resample, and mild JPEG-style compression loss. `severity` in [0, 1]."""
+    from scipy.ndimage import gaussian_filter, rotate
+
+    arr = image.astype(np.float32)
+
+    angle = rng.uniform(-1.5, 1.5) * severity * 4
+    if abs(angle) > 0.05:
+        arr = rotate(arr, angle, reshape=False, mode="nearest", cval=255)
+
+    sigma = 0.3 + severity * 1.4
+    arr = gaussian_filter(arr, sigma=sigma)
+
+    contrast = 1.0 - severity * rng.uniform(0.0, 0.35)
+    brightness = rng.uniform(-1, 1) * severity * 25
+    arr = (arr - 127.5) * contrast + 127.5 + brightness
+
+    noise_std = severity * rng.uniform(3, 14)
+    arr = arr + np.random.default_rng(rng.randint(0, 2**31 - 1)).normal(0, noise_std, arr.shape)
+
+    if severity > 0.3:
+        scale = rng.uniform(0.6, 0.9)
+        small = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize(
+            (max(1, int(arr.shape[1] * scale)), max(1, int(arr.shape[0] * scale))), Image.BILINEAR
+        )
+        arr = np.array(small.resize((arr.shape[1], arr.shape[0]), Image.BILINEAR), dtype=np.float32)
+
+    if severity > 0.5 and rng.random() < 0.4:
+        buf = io.BytesIO()
+        Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).save(
+            buf, format="JPEG", quality=int(rng.uniform(30, 60))
+        )
+        buf.seek(0)
+        arr = np.array(Image.open(buf).convert("L"), dtype=np.float32)
+
+    return np.clip(arr, 0, 255).astype(np.uint8)
+
+
+def generate_synthetic_page(rng: random.Random, *, severity: float = 0.5) -> tuple[SyntheticRecord, np.ndarray]:
+    """Generate one record and its degraded rendered MRZ image."""
+    record = generate_record(rng)
+    clean = render_mrz_lines(record.lines)
+    return record, degrade(clean, rng, severity=severity)
+
+
+if __name__ == "__main__":
+    rng = random.Random(1337)
+    n = 2000
+    passed = 0
+    for _ in range(n):
+        record = generate_record(rng)
+        result = spec.parse_td3(record.lines)
+        if result.all_valid:
+            passed += 1
+        else:
+            failing = [g.name for g in result.checks if not g.valid]
+            print(f"FAIL: {record.lines} -> bad groups {failing}")
+
+    print(f"synth.py self-test: {passed}/{n} generated records pass their own check digits")
+    assert passed == n, f"only {passed}/{n} synthetic records were self-consistent"
+
+    sample_rng = random.Random(42)
+    record, image = generate_synthetic_page(sample_rng, severity=0.6)
+    print(f"  rendered + degraded one sample page: shape={image.shape}, dtype={image.dtype}, "
+          f"doc_number={record.doc_number}, surname={record.surname}")
+    assert image.ndim == 2 and image.dtype == np.uint8
+
+    print("synth.py self-test OK")

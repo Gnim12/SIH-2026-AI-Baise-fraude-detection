@@ -1,0 +1,45 @@
+
+# BACKEND_BRIEF.md §2/§3: Postgres 16 + pgvector (records and embeddings in
+# one system) and MinIO (S3 API, originals preserved for forensics). No
+# Celery/Kafka/microservice split in v1 (§10) -- just the two stateful
+# services the app itself talks to.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: screening
+      POSTGRES_PASSWORD: screening
+      POSTGRES_DB: screening
+    ports:
+    - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U screening -d screening"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: screening
+      MINIO_ROOT_PASSWORD: screening-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  minio-data:
