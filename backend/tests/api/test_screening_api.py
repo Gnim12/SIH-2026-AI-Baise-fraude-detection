@@ -88,9 +88,10 @@ def test_multipart_upload_streams_real_ocr_and_ends_in_decision():
         ocr_event = next(e for e in events if e["stage"] == "ocr")
         # camelCase wire shape matching frontend/src/types/screening.ts, and
         # real extracted values (not hardcoded case-01 fixture data).
-        fields_by_key = {f["key"]: f["value"] for f in ocr_event["fields"]}
-        assert fields_by_key.get("doc_number") == "Y1122334Z"
-        assert ocr_event["mrz"]["status"] == "VERIFIED"
+        # The multipart `document_0_mrz_ground_truth` field above is ignored:
+        # stub decoding is not reachable over HTTP, so the answer key must
+        # not appear as a decoded MRZ reading.
+        assert not ocr_event.get("mrz")
         assert "documentId" in ocr_event  # camelCase, not document_id
 
         history_resp = client.get("/api/v1/history")

@@ -54,6 +54,15 @@ class DecisionStage:
     id = StageId.DECISION
 
     async def run(self, ctx: StageContext) -> StageResult:
+        if ctx.artefacts.get(StageId.GATE_1, {}).get("unavailable"):
+            reason = (
+                "Not cleared: the MRZ reader is unavailable on this terminal, so Gate 1 (MRZ↔VIZ cross-check) "
+                "did not run. Manual examination is required."
+            )
+            return StageResult(
+                state=StageState.PASSED, detail=reason,
+                artefacts={"verdict": Verdict.REVIEW_REQUIRED, "reason": reason},
+            )
         findings = ctx.artefacts.get(StageId.CONVERGENCE, {}).get("findings", [])
         verdict, reason = derive_verdict(findings)
         return StageResult(

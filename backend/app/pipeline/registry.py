@@ -39,7 +39,7 @@ class StageDefinition:
 
 
 STAGE_REGISTRY: tuple[StageDefinition, ...] = (
-    StageDefinition(StageId.MRZ_READ, "MRZ read · CRNN-CTC", WaveId.WAVE_1, False, ()),
+    StageDefinition(StageId.MRZ_READ, "MRZ read · fixed-slot CRNN", WaveId.WAVE_1, False, ()),
     StageDefinition(StageId.VIZ_READ, "VIZ read · RapidOCR", WaveId.WAVE_1, False, ()),
     StageDefinition(
         StageId.GATE_1, "Gate 1 · MRZ ↔ VIZ cross-check", None, True,

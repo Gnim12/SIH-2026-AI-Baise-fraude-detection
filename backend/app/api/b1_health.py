@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.ocr.mrz.runtime import get_mrz_runtime
 from app.registry import load_manifest
 from app.storage import b2_repositories as repo
 from app.storage.db import get_session
@@ -42,15 +43,21 @@ async def health_route(db: AsyncSession = Depends(get_session)) -> dict[str, Any
 
     manifest = load_manifest()
 
-    # Six nodes for the dashboard status strip. MRZ is `unavailable` (never
-    # `ok`/`live`) while no trained CRNN checkpoint exists (manifest.json
-    # marks mrz_crnn `placeholder: true`); OVD is `hold` since no sweep
+    # Six nodes for the dashboard status strip. MRZ is `live` only when its
+    # weights loaded and verified (app/ocr/mrz/runtime.py), and `unavailable`
+    # when they are absent, mismatched or still a placeholder -- never `live`
+    # on a placeholder. OVD is `hold` since no sweep
     # scanner is wired up; tamper/face/identity-graph are the three unbuilt
     # models -- `unavailable`, not silently omitted.
+    mrz = get_mrz_runtime().status
     nodes = [
         {
-            "node": "mrz", "status": "unavailable",
-            "detail": "No trained CRNN checkpoint exists yet.", "modelPin": _pin(manifest, "mrz_crnn"),
+            "node": "mrz", "status": mrz.state,
+            "detail": (
+                "MRZ recogniser weights loaded and verified." if mrz.state == "live"
+                else f"MRZ recogniser unavailable: {mrz.reason}"
+            ),
+            "modelPin": mrz.pin, "modelVersion": mrz.version,
         },
         {
             "node": "viz", "status": "ok",

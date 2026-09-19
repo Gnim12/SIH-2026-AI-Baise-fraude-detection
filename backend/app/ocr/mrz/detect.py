@@ -20,6 +20,10 @@ except ImportError:  # pragma: no cover - exercised only in envs without opencv
     _HAS_CV2 = False
 
 
+class BandSplitError(RuntimeError):
+    """A band was located but could not be split into the expected lines."""
+
+
 @dataclass
 class MrzBand:
     """A located MRZ band within a document image.
@@ -79,7 +83,7 @@ def find_mrz(
     grad = cv2.morphologyEx(grad, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (35, 5)))
     _, thresh = cv2.threshold(grad, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     thresh = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (35, 15)))
-    thresh = cv2.erode(thresh, None, iterations=2)
+    thresh = cv2.erode(thresh, cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3)), iterations=2)
 
     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -111,6 +115,12 @@ def find_mrz(
         band = _rotate(band, angle)
 
     lines = _split_lines(band, n_lines)
+    bad = [i for i, ln in enumerate(lines) if ln.ndim != 2 or ln.shape[0] < 2 or ln.shape[1] < 2]
+    if len(lines) != n_lines or bad:
+        raise BandSplitError(
+            f"MRZ band located at x={x0}, y={abs_y0}, {x1 - x0}x{y1 - y0}px, but could not be split "
+            f"into {n_lines} readable lines (got {len(lines)}; unusable line indices {bad})."
+        )
 
     bbox = (x0, abs_y0, x1 - x0, y1 - y0)
     region = (bbox[0] / w, bbox[1] / h, bbox[2] / w, bbox[3] / h)

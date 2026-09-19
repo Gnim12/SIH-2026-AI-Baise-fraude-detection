@@ -60,7 +60,7 @@ THRESHOLD_DEF_BY_ID = {d["id"]: d for d in THRESHOLD_DEFS}
 # BACKEND_BRIEF.md §1.5-adjacent: model pins are read-only over HTTP (spec
 # §4) -- there is deliberately no endpoint anywhere that writes this dict.
 MODEL_PINS: dict[str, str] = {
-    "crnn-ctc": "1.2.0", "rapidocr": "1.3.1", "resnet": "0.7.2", "arcface": "1.1.0",
+    "mrz-crnn-slot": "1.2.0", "rapidocr": "1.3.1", "resnet": "0.7.2", "arcface": "1.1.0",
 }
 
 

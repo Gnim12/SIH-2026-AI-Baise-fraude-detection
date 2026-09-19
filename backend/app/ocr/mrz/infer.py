@@ -41,6 +41,11 @@ from .canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH, normalize_line
 
 logger = logging.getLogger(__name__)
 
+# The audit-record name of this model. The recogniser is a fixed-slot head, not
+# CTC; the pin names what actually runs. The version comes from the export's
+# metadata.json, never from here.
+MRZ_PIN_NAME = "mrz-crnn-slot"
+
 _INPUT_NAME = "images"
 _OUTPUT_NAME = "log_probs"
 
@@ -61,6 +66,7 @@ class ModelIntegrityError(RuntimeError):
 class _OnnxModel:
     session: ort.InferenceSession
     line_len: int
+    version: str
 
 
 @dataclass
@@ -87,6 +93,16 @@ class MrzReadResult:
     groups: dict[str, decode.GroupDecodeResult] = field(default_factory=dict)
     band: Optional[detect.MrzBand] = None
     stub_mode: bool = False
+    # Set when a band was located but could not be turned into lines.
+    band_failure_detail: Optional[str] = None
+    decoded: Optional[decode.MrzDecodeResult] = None
+    # Mean, over every character of the final decoded lines, of the network's
+    # probability for that character. None when nothing was decoded.
+    mean_confidence: Optional[float] = None
+
+    @property
+    def recovered(self) -> list[decode.RecoveredCharacter]:
+        return self.decoded.recovered if self.decoded is not None else []
 
 
 class MRZReader:
@@ -111,7 +127,7 @@ class MRZReader:
         self.weights_path = Path(weights_path) if weights_path else None
         self.stub_confidence = stub_confidence
         self.stub_mode = False
-        self._model = None
+        self._model: Optional[_OnnxModel] = None
 
         if self.weights_path is not None and self.weights_path.exists():
             self._model = self._load_model(self.weights_path)
@@ -133,6 +149,15 @@ class MRZReader:
             "require_trained_weights=False to have been passed explicitly. "
             "If you are seeing this outside a test, something is misconfigured."
         )
+
+    @property
+    def version(self) -> str:
+        """Model version as recorded in the export's metadata.json."""
+        return self._model.version if self._model is not None else "stub"
+
+    @property
+    def pin(self) -> str:
+        return f"{MRZ_PIN_NAME} {self.version}"
 
     def _load_model(self, weights_path: Path) -> "_OnnxModel":
         """Verify the on-disk ONNX weights against models/manifest.json, then
@@ -188,10 +213,18 @@ class MRZReader:
             )
 
         metadata_path = weights_path.parent / "metadata.json"
-        line_len = json.loads(metadata_path.read_text())["line_len"] if metadata_path.exists() else 44
+        if not metadata_path.exists():
+            raise ModelIntegrityError(
+                f"{metadata_path} is missing: the model version is read from it and cannot be guessed."
+            )
+        metadata = json.loads(metadata_path.read_text())
+        version = metadata.get("version")
+        if not isinstance(version, str) or not version:
+            raise ModelIntegrityError(f"{metadata_path} has no 'version'.")
+        line_len = int(metadata.get("line_len", 44))
 
         logger.info("MRZReader loaded ONNX weights from %s (sha256=%s...)", weights_path, actual_sha256[:12])
-        return _OnnxModel(session=session, line_len=line_len)
+        return _OnnxModel(session=session, line_len=line_len, version=version)
 
     def read(
         self,
@@ -208,7 +241,17 @@ class MRZReader:
                 "never accidentally leak into a production call path."
             )
 
-        band = detect.find_mrz(image, n_lines=spec.LINE_SHAPE[mrz_format][0])
+        n_lines = spec.LINE_SHAPE[mrz_format][0]
+        try:
+            band = detect.find_mrz(image, n_lines=n_lines)
+        except detect.BandSplitError as exc:
+            return MrzReadResult(
+                status=decode.DecodeStatus.UNRECOVERABLE,
+                parsed=None,
+                signals=[MrzSignal(code="MRZ_NOT_FOUND", severity="high", detail=str(exc))],
+                stub_mode=self.stub_mode,
+                band_failure_detail=str(exc),
+            )
         if band is None:
             return MrzReadResult(
                 status=decode.DecodeStatus.UNRECOVERABLE,
@@ -254,27 +297,36 @@ class MRZReader:
 
     def _to_result(self, decoded: decode.MrzDecodeResult, band: detect.MrzBand) -> MrzReadResult:
         parsed = decoded.parsed
+        confs = decoded.char_confidences
+        all_confs = [c for line in confs for c in line]
+        mean_confidence = float(sum(all_confs) / len(all_confs)) if all_confs else 0.0
+
+        def span_conf(line: int, start: int, end: int) -> float:
+            vals = confs[line][start:end]
+            return float(sum(vals) / len(vals)) if vals else 0.0
+
+        # Fields guarded by a check digit are only reported when that check
+        # digit validated. A field whose check failed is absent -- the
+        # signals say why -- never a guess presented as a reading.
+        check_ok = {g.name: g.valid for g in parsed.checks}
         fields: dict[str, MrzField] = {}
-
-        def conf_for(group_name: str) -> float:
-            group = decoded.groups.get(group_name)
-            if group is None:
-                return 1.0
-            return 1.0 if group.status is decode.DecodeStatus.VERIFIED else 0.3
-
-        fields["doc_number"] = MrzField("doc_number", parsed.doc_number, conf_for("doc_number"))
-        fields["surname"] = MrzField("surname", parsed.surname, 0.9)
-        fields["given_names"] = MrzField("given_names", parsed.given_names, 0.9)
-        fields["nationality"] = MrzField("nationality", parsed.nationality, 0.9)
-        fields["sex"] = MrzField("sex", parsed.sex, 0.9)
-        fields["birth_date"] = MrzField(
-            "birth_date", parsed.birth_date.isoformat() if parsed.birth_date else parsed.birth_date_raw,
-            conf_for("birth_date"),
-        )
-        fields["expiry_date"] = MrzField(
-            "expiry_date", parsed.expiry_date.isoformat() if parsed.expiry_date else parsed.expiry_date_raw,
-            conf_for("expiry_date"),
-        )
+        if decoded.format is spec.MrzFormat.TD3:
+            if check_ok.get("doc_number", False):
+                fields["doc_number"] = MrzField("doc_number", parsed.doc_number, span_conf(1, 0, 10))
+            fields["surname"] = MrzField("surname", parsed.surname, span_conf(0, 5, 44))
+            fields["given_names"] = MrzField("given_names", parsed.given_names, span_conf(0, 5, 44))
+            fields["nationality"] = MrzField("nationality", parsed.nationality, span_conf(1, 10, 13))
+            fields["sex"] = MrzField("sex", parsed.sex, span_conf(1, 20, 21))
+            if check_ok.get("birth_date", False):
+                fields["birth_date"] = MrzField(
+                    "birth_date", parsed.birth_date.isoformat() if parsed.birth_date else parsed.birth_date_raw,
+                    span_conf(1, 13, 20),
+                )
+            if check_ok.get("expiry_date", False):
+                fields["expiry_date"] = MrzField(
+                    "expiry_date", parsed.expiry_date.isoformat() if parsed.expiry_date else parsed.expiry_date_raw,
+                    span_conf(1, 21, 28),
+                )
 
         signals: list[MrzSignal] = []
         for name, group in decoded.groups.items():
@@ -301,6 +353,8 @@ class MRZReader:
             groups=decoded.groups,
             band=band,
             stub_mode=self.stub_mode,
+            decoded=decoded,
+            mean_confidence=mean_confidence,
         )
 
 

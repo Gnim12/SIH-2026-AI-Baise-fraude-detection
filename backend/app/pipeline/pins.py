@@ -8,6 +8,7 @@ flagged in the milestone report rather than silently renamed on either side.
 """
 from __future__ import annotations
 
+from app.ocr.mrz.runtime import get_mrz_runtime
 from app.registry import ModelRegistryError, load_manifest
 
 # Wave 2's four stages (tamper/ovd-sweep/face-verify/identity-graph) are
@@ -28,6 +29,13 @@ def resolve_pins() -> dict[str, str]:
         return {}
     pins: dict[str, str] = {}
     for key, entry in manifest.items():
+        if key == "mrz_crnn":
+            continue  # pin comes from the model that actually loaded, below
         version = entry.get("version", "unknown")
         pins[key] = f"{key} {version}"
+    # "mrz-crnn-slot <version from metadata.json>", and only while the model
+    # is live: an unavailable model emitted nothing, so has no pin to record.
+    mrz_pin = get_mrz_runtime().status.pin
+    if mrz_pin is not None:
+        pins["mrz_crnn"] = mrz_pin
     return pins

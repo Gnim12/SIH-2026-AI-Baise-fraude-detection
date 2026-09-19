@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-import json
 import logging
 import uuid
 
@@ -77,17 +76,13 @@ async def start_screening(
         image_url = save_document_image(document_id, raw)
         document_image_urls[document_id] = image_url
 
-        # Dev/test-only affordance -- see app/pipeline/context.py's
-        # DocumentInput.mrz_ground_truth docstring. The real frontend never
-        # sends this field; it exists so an integration test can exercise a
-        # genuine checksum-constrained MRZ decode against a real image
-        # without a trained CRNN checkpoint (§1.3).
-        ground_truth_raw = form.get(f"document_{i}_mrz_ground_truth")
-        mrz_ground_truth = json.loads(ground_truth_raw) if ground_truth_raw else None
-
+        # No MRZ ground-truth field is read from the request: the MRZ is
+        # always decoded by the real model or reported unavailable. (A
+        # `document_{i}_mrz_ground_truth` form field used to reach stub
+        # decoding from here; it is deliberately ignored now.)
         documents.append(DocumentInput(
             document_id=document_id, doc_type=doc_type, original_bytes=raw,
-            rectified=image, mrz_ground_truth=mrz_ground_truth,
+            rectified=image,
         ))
 
     live_frame_upload = form.get("liveFrame")

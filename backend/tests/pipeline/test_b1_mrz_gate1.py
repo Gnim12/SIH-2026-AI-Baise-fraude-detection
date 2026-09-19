@@ -40,7 +40,7 @@ async def test_clean_td3_decodes_all_fields_with_valid_check_digits():
 
     assert result.state == StageState.PASSED, result.detail
     assert not any(s.signal_id.startswith("MRZ_CHECKSUM") for s in result.signals)
-    assert not any(s.signal_id == "MRZ_COMPOSITE_CHECKSUM_FAIL" for s in result.signals)
+    assert not any(s.signal_id == "MRZ_CHECKSUM_FAIL_COMPOSITE" for s in result.signals)
     ribbon = result.artefacts["mrz_schema"]
     assert ribbon.fields
     assert all(f.check_digit_state.value != "invalid" for f in ribbon.fields)

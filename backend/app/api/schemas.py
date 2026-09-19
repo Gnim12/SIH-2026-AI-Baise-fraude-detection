@@ -145,6 +145,34 @@ class MrzFieldRow(BaseModel):
     check_digit_state: CheckDigitState
 
 
+class RecoveredCharacter(BaseModel):
+    """One position where the checksum-verified reading differs from the
+    network's greedy best path. Confidences are the network's own."""
+
+    model_config = _camel_model()
+    line_index: int
+    position: int
+    raw: str
+    recovered: str
+    raw_confidence: float
+    recovered_confidence: float
+    # raw_confidence exceeds recovered_confidence by more than
+    # thresholds.mrz_recovery_confidence_margin. Reported, never suppressed.
+    suspect: bool = False
+
+
+class RecoveryStats(BaseModel):
+    """Per-run recovery statistics: the data for calibrating the suspect
+    margin and the evidence behind any recovery-rate claim."""
+
+    model_config = _camel_model()
+    total_characters: int
+    recovered: int
+    suspect: int
+    mean_raw_confidence: Optional[float] = None  # None when nothing was recovered
+    mean_recovered_confidence: Optional[float] = None
+
+
 class MrzResult(BaseModel):
     model_config = _camel_model()
     format: str
@@ -153,6 +181,8 @@ class MrzResult(BaseModel):
     fields: list[MrzFieldRow]
     composite_check_digit: dict[str, str]
     model_pin: str
+    recovered_characters: list[RecoveredCharacter] = []
+    recovery_stats: Optional[RecoveryStats] = None
 
 
 CrossCheckStatus = Enum("CrossCheckStatus", {"MATCH": "match", "MISMATCH": "mismatch", "UNREADABLE": "unreadable"}, type=str)

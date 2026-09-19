@@ -14,6 +14,14 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Thresholds:
     mrz_viz_field_tolerance: float = 0.92
+    # Mean per-character network probability over the decoded MRZ lines below
+    # which MRZ_LOW_CONFIDENCE is raised.
+    mrz_low_confidence_mean: float = 0.6
+    # A recovery is suspect when the network's confidence in its raw reading
+    # exceeds its confidence in the checksum-resolved reading by more than
+    # this. A confident network that the check digit contradicts strongly is
+    # either wrong, or the band was misdetected and the whole line is unreliable.
+    mrz_recovery_confidence_margin: float = 0.30
 
 
 DEFAULT_THRESHOLDS = Thresholds()

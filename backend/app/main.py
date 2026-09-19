@@ -20,6 +20,7 @@ from .api.media import MEDIA_DIR
 from .auth import models as auth_models  # noqa: F401 -- registers Officer/OfficerSession on Base.metadata
 from .auth.routes import admin_router, router as auth_router
 from .config import settings
+from .ocr.mrz.runtime import get_mrz_runtime
 from .pipeline.branches.ocr import warm_up as warm_up_ocr
 from .registry import verify_all
 from .storage import b1_models  # noqa: F401 -- registers the B1b tables on Base.metadata
@@ -50,7 +51,10 @@ def _check_artefact_root_writable() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # §1.5: refuse to boot on a hash mismatch or missing model file.
-    model_versions = verify_all()
+    # The MRZ model is exempt: a missing/placeholder/mismatched MRZ model
+    # makes the MRZ node "unavailable" (app/ocr/mrz/runtime.py), it does not
+    # stop the terminal booting.
+    model_versions = verify_all(exempt=frozenset({"mrz_crnn"}))
     logger.info("model registry verified: %d entries (%s)", len(model_versions), model_versions)
 
     # B1b: artefact storage must be writable before the first traveller
@@ -64,7 +68,11 @@ async def lifespan(app: FastAPI):
     # request happens to hit branch_ocr() first -- see ocr.py's warm_up()
     # docstring. Off the event loop since this is blocking CPU/IO work.
     await asyncio.to_thread(warm_up_ocr)
-    logger.info("OCR branch warm-up complete: RapidOCR + MRZReader sessions loaded")
+    mrz_status = get_mrz_runtime().status
+    if mrz_status.state == "live":
+        logger.info("OCR branch warm-up complete: RapidOCR + MRZ recogniser live (%s)", mrz_status.pin)
+    else:
+        logger.error("OCR branch warm-up complete: MRZ recogniser UNAVAILABLE -- %s", mrz_status.reason)
 
     yield
 

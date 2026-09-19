@@ -79,7 +79,7 @@ def test_no_endpoint_can_modify_a_model_pin():
             "/api/config/thresholds",
             json={
                 "officerId": "OFF-CFG", "terminalId": "TERM-CFG",
-                "changes": [{"id": "crnn-ctc", "value": 9.9}],
+                "changes": [{"id": "mrz-crnn-slot", "value": 9.9}],
                 "reason": "Attempting to sneak a model pin through the threshold endpoint.",
             },
         )

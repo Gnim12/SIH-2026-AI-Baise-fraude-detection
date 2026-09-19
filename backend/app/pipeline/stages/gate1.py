@@ -35,8 +35,17 @@ class Gate1Stage:
     id = StageId.GATE_1
 
     async def run(self, ctx: StageContext) -> StageResult:
-        pin = resolve_pins().get("mrz_crnn", "mrz_crnn unknown")
         mrz_artefacts = ctx.artefacts.get(StageId.MRZ_READ, {})
+        if mrz_artefacts.get("unavailable"):
+            # The MRZ reader could not run, so there is nothing to compare.
+            # A check that cannot run is not a check that ran: not failed
+            # (that would suggest a bad document), certainly not passed.
+            return StageResult(
+                state=StageState.UNAVAILABLE,
+                detail="Gate 1 cannot run: the MRZ reader is unavailable on this terminal, so no MRZ↔VIZ cross-check was made.",
+                artefacts={"unavailable": True},
+            )
+        pin = resolve_pins().get("mrz_crnn", "mrz-crnn-slot unknown")
         viz_artefacts = ctx.artefacts.get(StageId.VIZ_READ, {})
         mrz_result = mrz_artefacts.get("mrz_read_result")
         viz_fields = viz_artefacts.get("viz_fields", [])

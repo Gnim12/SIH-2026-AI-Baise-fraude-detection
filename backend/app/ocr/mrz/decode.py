@@ -82,12 +82,31 @@ class LineDecodeResult:
     line_logprob: float
 
 
+@dataclass(frozen=True)
+class RecoveredCharacter:
+    """One position where the checksum-verified hypothesis differs from the
+    network's greedy best path. Confidences are the network's own
+    probabilities for each character at that slot -- nothing derived."""
+
+    line: int
+    position: int
+    raw: str
+    recovered: str
+    raw_confidence: float
+    recovered_confidence: float
+
+
 @dataclass
 class MrzDecodeResult:
     format: spec.MrzFormat
     lines: list[str]
     groups: dict[str, GroupDecodeResult]
     parsed: spec.MrzResult
+    greedy_lines: list[str] = dc_field(default_factory=list)
+    recovered: list[RecoveredCharacter] = dc_field(default_factory=list)
+    # Per line, the network's probability for the character in the final
+    # decoded line at each slot.
+    char_confidences: list[list[float]] = dc_field(default_factory=list)
 
     @property
     def status(self) -> DecodeStatus:
@@ -179,6 +198,8 @@ def decode_mrz(logprobs_lines: list[np.ndarray], fmt: spec.MrzFormat) -> MrzDeco
     line_chars = [list(l) for l in baseline_lines]
 
     groups: dict[str, GroupDecodeResult] = {}
+    recovered: list[RecoveredCharacter] = []
+    index_of = {c: i for i, c in enumerate(spec.MRZ_CHARSET)}
     for layout in LAYOUTS[fmt]:
         span_len = layout.check_digit_index - layout.field_start + 1
         lp_slice = logprobs_lines[layout.line][layout.field_start : layout.field_start + span_len]
@@ -186,11 +207,31 @@ def decode_mrz(logprobs_lines: list[np.ndarray], fmt: spec.MrzFormat) -> MrzDeco
         result.name = layout.name
         groups[layout.name] = result
         patched = result.text + result.check_char
+        if result.status is DecodeStatus.VERIFIED:
+            for offset, ch in enumerate(patched):
+                pos = layout.field_start + offset
+                raw_ch = baseline_lines[layout.line][pos]
+                if raw_ch == ch:
+                    continue
+                row = logprobs_lines[layout.line][pos]
+                recovered.append(RecoveredCharacter(
+                    line=layout.line, position=pos, raw=raw_ch, recovered=ch,
+                    raw_confidence=float(np.exp(row[index_of[raw_ch]])),
+                    recovered_confidence=float(np.exp(row[index_of[ch]])),
+                ))
         line_chars[layout.line][layout.field_start : layout.check_digit_index + 1] = list(patched)
 
     final_lines = ["".join(chars) for chars in line_chars]
     parsed = spec.parse(final_lines)
-    return MrzDecodeResult(format=fmt, lines=final_lines, groups=groups, parsed=parsed)
+    char_confidences = [
+        [float(np.exp(lp[i, index_of[ch]])) for i, ch in enumerate(line)]
+        for lp, line in zip(logprobs_lines, final_lines)
+    ]
+    recovered.sort(key=lambda r: (r.line, r.position))
+    return MrzDecodeResult(
+        format=fmt, lines=final_lines, groups=groups, parsed=parsed,
+        greedy_lines=baseline_lines, recovered=recovered, char_confidences=char_confidences,
+    )
 
 
 def fake_logprobs(

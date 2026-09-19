@@ -5,7 +5,8 @@ shortcut).
 
 Grouping rules:
 - MRZ_VIZ_MISMATCH_* (identity-field disagreement) -> one finding.
-- Checksum failures (MRZ_CHECKSUM_FAIL_LINE1/2, MRZ_COMPOSITE_CHECKSUM_FAIL)
+- Checksum failures (MRZ_CHECKSUM_FAIL_LINE1/2, MRZ_CHECKSUM_FAIL_COMPOSITE,
+  MRZ_DECODE_UNRECOVERABLE)
   -> one 'MRZ integrity failure' finding.
 - Unreadable fields (MRZ_BAND_NOT_FOUND, MRZ_VIZ_FIELD_UNREADABLE_*,
   VIZ_FIELD_NOT_READABLE) -> one 'Document not fully readable' finding,

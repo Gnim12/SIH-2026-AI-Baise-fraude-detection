@@ -1,10 +1,14 @@
-"""mrz-read stage: adapter over app/ocr/mrz (detect -> CRNN -> checksum-
-constrained decode), via the already-shared MRZReader instance in
-app/pipeline/branches/ocr.py. No MRZ logic is reimplemented here.
+"""mrz-read stage: adapter over app/ocr/mrz (detect -> normalize_line -> ONNX
+-> checksum-constrained decode), via the process-wide reader resolved in
+app/ocr/mrz/runtime.py. No MRZ logic is reimplemented here.
 
 Emits: the parsed field set, per-field check-digit validity, the composite
-check digit, the character-level ribbon data (MrzResult.lines) with
-recovered characters flagged, and the standard MRZ signal set.
+check digit, the character-level ribbon data (MrzResult.lines) with the
+recovered characters, and the MRZ signal set. A field guarded by a check digit
+that did not validate is absent, with a signal saying why -- never a guess.
+
+When the model is unavailable (missing, placeholder, hash mismatch) the stage
+settles `unavailable`: not failed, not passed.
 """
 from __future__ import annotations
 
@@ -12,15 +16,15 @@ import asyncio
 import datetime
 
 from app.api.schemas import (
-    CheckDigitState, Modality, MrzCharacter, MrzCharRole, MrzFieldRow, MrzResult, Signal, StageState,
+    CheckDigitState, Modality, MrzCharacter, MrzCharRole, MrzFieldRow, MrzResult, RecoveredCharacter,
+    RecoveryStats, Signal, StageState,
 )
+from app.ocr.mrz import decode
 from app.ocr.mrz.infer import MrzReadResult
-from app.pipeline.branches.ocr import _shared_mrz_reader  # reuse: one ONNX session per process
-from app.pipeline.pins import resolve_pins
+from app.ocr.mrz.runtime import get_mrz_runtime
 from app.pipeline.registry import StageId
 from app.pipeline.runner import StageContext, StageResult
-
-LOW_CONFIDENCE_THRESHOLD = 0.6
+from app.pipeline.thresholds import DEFAULT_THRESHOLDS
 
 
 def _now_iso() -> str:
@@ -38,11 +42,34 @@ def _line_signal_code(line_index: int) -> str:
     return "MRZ_CHECKSUM_FAIL_LINE1" if line_index == 0 else "MRZ_CHECKSUM_FAIL_LINE2"
 
 
+def _recovered_payload(result: MrzReadResult) -> list[RecoveredCharacter]:
+    margin = DEFAULT_THRESHOLDS.mrz_recovery_confidence_margin
+    return [
+        RecoveredCharacter(
+            line_index=rc.line, position=rc.position, raw=rc.raw, recovered=rc.recovered,
+            raw_confidence=rc.raw_confidence, recovered_confidence=rc.recovered_confidence,
+            suspect=(rc.raw_confidence - rc.recovered_confidence) > margin,
+        )
+        for rc in result.recovered
+    ]
+
+
+def _recovery_stats(result: MrzReadResult, recovered: list[RecoveredCharacter]) -> RecoveryStats:
+    n = len(recovered)
+    return RecoveryStats(
+        total_characters=sum(len(line) for line in (result.parsed.lines if result.parsed else [])),
+        recovered=n,
+        suspect=sum(1 for r in recovered if r.suspect),
+        mean_raw_confidence=sum(r.raw_confidence for r in recovered) / n if n else None,
+        mean_recovered_confidence=sum(r.recovered_confidence for r in recovered) / n if n else None,
+    )
+
+
 def _build_ribbon(result: MrzReadResult, pin: str) -> MrzResult:
     parsed = result.parsed
     assert parsed is not None  # caller only reaches here once a band was decoded
+    recovered_payload = _recovered_payload(result)
     checks_by_name = {g.name: g for g in parsed.checks}
-    decode_groups = result.groups  # name -> decode.GroupDecodeResult, has .beam
 
     lines: list[list[MrzCharacter]] = []
     for line_idx, text in enumerate(parsed.lines):
@@ -63,27 +90,19 @@ def _build_ribbon(result: MrzReadResult, pin: str) -> MrzResult:
                         char=text[i], index=i, role=MrzCharRole.FAILED_SIGNAL,
                         recovery_detail=None,
                     )
+        # Recovered characters: positions where the checksum-verified reading
+        # differs from the network's greedy path. Nothing recovered, nothing
+        # tinted.
+        for rc in result.recovered:
+            if rc.line != line_idx:
                 continue
-            # Valid group: flag positions the checksum-constrained beam
-            # changed from the network's raw top-1 hypothesis.
-            group = decode_groups.get(check.name)
-            if group is None or not group.beam:
-                continue
-            raw_top = group.beam[0][0]
-            selected = group.text + group.check_char
-            for offset in range(min(len(raw_top), len(selected))):
-                if raw_top[offset] == selected[offset]:
-                    continue
-                pos = check.start + offset
-                if pos >= check.end:
-                    continue  # check-digit slot handled above
-                chars[pos] = MrzCharacter(
-                    char=selected[offset], index=pos, role=MrzCharRole.RECOVERED,
-                    recovery_detail=(
-                        f"Recovered by ICAO check digit · network read "
-                        f"{raw_top[offset]!r}, checksum-constrained decode selected {selected[offset]!r}"
-                    ),
-                )
+            chars[rc.position] = MrzCharacter(
+                char=rc.recovered, index=rc.position, role=MrzCharRole.RECOVERED,
+                recovery_detail=(
+                    f"Recovered by ICAO check digit · network favoured {rc.raw!r} ({rc.raw_confidence:.0%}), "
+                    f"verified reading {rc.recovered!r} ({rc.recovered_confidence:.0%})"
+                ),
+            )
         lines.append(chars)
 
     fields: list[MrzFieldRow] = []
@@ -108,6 +127,8 @@ def _build_ribbon(result: MrzReadResult, pin: str) -> MrzResult:
     return MrzResult(
         format=parsed.format.value, line_length=len(parsed.lines[0]) if parsed.lines else 0,
         lines=lines, fields=fields, composite_check_digit=composite_state, model_pin=pin,
+        recovered_characters=recovered_payload,
+        recovery_stats=_recovery_stats(result, recovered_payload),
     )
 
 
@@ -115,10 +136,24 @@ class MrzReadStage:
     id = StageId.MRZ_READ
 
     async def run(self, ctx: StageContext) -> StageResult:
-        pin = resolve_pins().get("mrz_crnn", "mrz_crnn unknown")
-        reader = _shared_mrz_reader()
+        runtime = get_mrz_runtime()
+        reader = runtime.reader
+        if reader is None:
+            # Missing / placeholder / hash-mismatched model. `unavailable`,
+            # not failed and not passed: a check that cannot run is not a
+            # check that ran. No signal is emitted -- there is no model to
+            # attribute one to.
+            return StageResult(
+                state=StageState.UNAVAILABLE,
+                detail=f"MRZ reader unavailable: {runtime.status.reason}",
+                artefacts={"unavailable": True},
+            )
+
+        pin = reader.pin
         image = ctx.inputs["document_image"]
-        ground_truth = ctx.inputs.get("mrz_ground_truth")
+        # Ground truth is honoured only by a stub-mode reader, which exists
+        # only in tests. A real reader is never handed it.
+        ground_truth = ctx.inputs.get("mrz_ground_truth") if reader.stub_mode else None
 
         def _read() -> MrzReadResult:
             return reader.read(image, stub_ground_truth=ground_truth)
@@ -126,48 +161,71 @@ class MrzReadStage:
         try:
             result = await asyncio.to_thread(_read)
         except ValueError:
-            # Stub mode (no trained CRNN weights) and no ground truth was
-            # supplied: the band exists but cannot be decoded. Real coverage
-            # gap, not a crash -- see app/ocr/mrz/infer.py's module docstring.
+            if not reader.stub_mode:
+                raise
+            # Stub reader (tests only) with no ground truth to decode against.
             return StageResult(
                 state=StageState.FAILED,
-                detail="MRZ band located but no trained model and no ground truth were available to decode it.",
-                signals=[_signal(
-                    "MRZ_LOW_CONFIDENCE",
-                    "No trained CRNN checkpoint exists yet and no ground truth was supplied "
-                    "for this capture; the MRZ could not be decoded.",
-                    pin,
-                )],
+                detail="Stub MRZ reader was given no ground truth to decode against.",
+                signals=[_signal("MRZ_LOW_CONFIDENCE", "Stub MRZ reader had no ground truth.", pin)],
             )
 
         if result.band is None or result.parsed is None:
+            detail = result.band_failure_detail or "No machine-readable zone could be located on this document."
             return StageResult(
-                state=StageState.FAILED,
-                detail="No machine-readable zone could be located on this document.",
-                signals=[_signal(
-                    "MRZ_BAND_NOT_FOUND", "No machine-readable zone could be located on this document.", pin,
-                )],
+                state=StageState.FAILED, detail=detail,
+                signals=[_signal("MRZ_BAND_NOT_FOUND", detail, pin)],
             )
 
         signals: list[Signal] = []
+        failed_by_code: dict[str, list[str]] = {}
         for check in result.parsed.checks:
             if check.valid:
                 continue
-            code = "MRZ_COMPOSITE_CHECKSUM_FAIL" if check.name == "composite" else _line_signal_code(check.line)
+            code = "MRZ_CHECKSUM_FAIL_COMPOSITE" if check.name == "composite" else _line_signal_code(check.line)
+            failed_by_code.setdefault(code, []).append(
+                f"{check.name.replace('_', ' ')} check digit expected {check.expected!r}, read {check.read!r}"
+            )
+        for code, details in failed_by_code.items():
             signals.append(_signal(
-                code,
-                f"MRZ {check.name.replace('_', ' ')} check digit expected {check.expected!r}, read {check.read!r}.",
+                code, "MRZ " + "; ".join(details) + ". Fields guarded by a failed check digit are not reported.", pin,
+            ))
+
+        if result.status is decode.DecodeStatus.UNRECOVERABLE:
+            unrecoverable = [
+                n.replace("_", " ") for n, g in result.groups.items()
+                if g.status is decode.DecodeStatus.UNRECOVERABLE
+            ]
+            signals.append(_signal(
+                "MRZ_DECODE_UNRECOVERABLE",
+                "The checksum-constrained decoder could not produce a valid reading"
+                + (f" for: {', '.join(unrecoverable)}." if unrecoverable else "."),
                 pin,
             ))
 
-        confidences = [f.confidence for f in result.fields.values()]
-        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
-        if avg_conf < LOW_CONFIDENCE_THRESHOLD:
+        mean_conf = result.mean_confidence
+        if mean_conf is not None and mean_conf < DEFAULT_THRESHOLDS.mrz_low_confidence_mean:
             signals.append(_signal(
-                "MRZ_LOW_CONFIDENCE", f"Average MRZ field confidence {avg_conf:.2f} is below threshold.", pin,
+                "MRZ_LOW_CONFIDENCE",
+                f"Mean per-character confidence {mean_conf:.2f} is below the "
+                f"{DEFAULT_THRESHOLDS.mrz_low_confidence_mean:.2f} threshold.",
+                pin,
             ))
 
         ribbon = _build_ribbon(result, pin)
+        suspects = [r for r in ribbon.recovered_characters if r.suspect]
+        if suspects:
+            where = "; ".join(
+                f"line {r.line_index + 1} position {r.position} (network read {r.raw!r} at {r.raw_confidence:.0%}, "
+                f"resolved to {r.recovered!r} at {r.recovered_confidence:.0%})"
+                for r in suspects
+            )
+            signals.append(_signal(
+                "MRZ_RECOVERY_SUSPECT",
+                f"A confident network reading was overridden by the check digit at: {where}. Either the network "
+                "is wrong or the band was misdetected and the line is unreliable; the recovery is reported, not trusted.",
+                pin,
+            ))
         state = StageState.FAILED if any(not c.valid for c in result.parsed.checks) else StageState.PASSED
 
         return StageResult(
