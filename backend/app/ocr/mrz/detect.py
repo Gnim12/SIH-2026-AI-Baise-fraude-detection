@@ -20,6 +20,13 @@ except ImportError:  # pragma: no cover - exercised only in envs without opencv
     _HAS_CV2 = False
 
 
+# The morphological kernels below are absolute-pixel and were tuned for a page
+# about this wide (an MRZ line spans ~90% of the page, so its character pitch
+# comes out near 18 px). Pages are resampled to this width before detection so a
+# 640 px preview and a 4000 px photo behave alike; bboxes are mapped back.
+WORKING_PAGE_WIDTH = 900
+
+
 class BandSplitError(RuntimeError):
     """A band was located but could not be split into the expected lines."""
 
@@ -68,6 +75,12 @@ def find_mrz(
     horizontal strips. Returns None if no plausible band is found.
     """
     _require_cv2()
+    scale = WORKING_PAGE_WIDTH / image.shape[1]
+    if abs(scale - 1.0) > 0.02:
+        interpolation = cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
+        image = cv2.resize(image, (WORKING_PAGE_WIDTH, max(1, round(image.shape[0] * scale))), interpolation=interpolation)
+    else:
+        scale = 1.0
     h, w = image.shape[:2]
     gray = _to_gray(image)
 
@@ -112,7 +125,9 @@ def find_mrz(
 
     angle = _estimate_skew(band)
     if abs(angle) > 0.2:
-        band = _rotate(band, angle)
+        # cv2.getRotationMatrix2D rotates counter-clockwise for positive angles, while _estimate_skew
+        # reports the tilt of the text; undoing the tilt needs the opposite sign (B1h: the old sign doubled it).
+        band = _rotate(band, -angle)
 
     lines = _split_lines(band, n_lines)
     bad = [i for i, ln in enumerate(lines) if ln.ndim != 2 or ln.shape[0] < 2 or ln.shape[1] < 2]
@@ -124,6 +139,7 @@ def find_mrz(
 
     bbox = (x0, abs_y0, x1 - x0, y1 - y0)
     region = (bbox[0] / w, bbox[1] / h, bbox[2] / w, bbox[3] / h)
+    bbox = (round(bbox[0] / scale), round(bbox[1] / scale), round(bbox[2] / scale), round(bbox[3] / scale))
     return MrzBand(bbox=bbox, region=region, angle_deg=angle, lines=lines)
 
 

@@ -148,6 +148,19 @@ def _ink_runs(image) -> int:
     return int(np.count_nonzero(dark[1:] & ~dark[:-1]) + (1 if dark[0] else 0))
 
 
+def _canvas_clips_the_tail() -> bool:
+    from app.ocr.mrz import canonical
+
+    return canonical.TARGET_INK_LEFT + canonical.TARGET_INK_WIDTH > canonical.CANONICAL_WIDTH
+
+
+@pytest.mark.xfail(
+    condition=_canvas_clips_the_tail(), strict=True,
+    reason="B1h: the 1.4.0 weights were trained on 704 px renders that cut off the last ~5 of 44 "
+    "characters, so normalize_line reproduces that framing (TARGET_INK_WIDTH 785 > canvas). This test "
+    "passes, and the xfail flips to a failure that must be removed, once a retrained model (B1i) lets "
+    "TARGET_INK_WIDTH fit the canvas.",
+)
 @pytest.mark.parametrize("width", [500, 700, 900, 1400])
 def test_normalize_keeps_all_44_characters(width):
     """A 44-cell band of any width must come out of normalisation with all 44

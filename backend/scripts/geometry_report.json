@@ -1,0 +1,558 @@
+{
+  "before": {
+    "crop_training": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.59767,
+        "cer_constrained": 0.59756,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.52693,
+        "cer_constrained": 0.52744,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.02398,
+        "cer_constrained": 0.02358,
+        "line_exact_greedy": 0.525,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.59591,
+        "cer_constrained": 0.5958,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.65773,
+        "cer_constrained": 0.65733,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "band_split": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.59051,
+        "cer_constrained": 0.59011,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.52472,
+        "cer_constrained": 0.52472,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.0517,
+        "cer_constrained": 0.05136,
+        "line_exact_greedy": 0.3675,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.5958,
+        "cer_constrained": 0.59739,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.65733,
+        "cer_constrained": 0.6579,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "page_detect": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.53494,
+        "cer_constrained": 0.53551,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.5225,
+        "cer_constrained": 0.52301,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.32682,
+        "cer_constrained": 0.32597,
+        "line_exact_greedy": 0.1875,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.61756,
+        "cer_constrained": 0.61767,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.70591,
+        "cer_constrained": 0.70608,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    }
+  },
+  "meta": {
+    "records": 200,
+    "seed": 777001,
+    "severity": "uniform(0,1)",
+    "heights": [
+      24,
+      28,
+      32,
+      36,
+      40
+    ],
+    "visible_chars": 39,
+    "note": "CER = wrong chars / all 88 chars per record; path failures count as fully wrong"
+  },
+  "attempt1_uniform_690": {
+    "crop_training": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.53864,
+        "cer_constrained": 0.53898,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.51142,
+        "cer_constrained": 0.51182,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.15222,
+        "cer_constrained": 0.14892,
+        "line_exact_greedy": 0.3125,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.50278,
+        "cer_constrained": 0.5029,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.66903,
+        "cer_constrained": 0.66938,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "band_split": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.5192,
+        "cer_constrained": 0.51983,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.48716,
+        "cer_constrained": 0.48756,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.06528,
+        "cer_constrained": 0.0646,
+        "line_exact_greedy": 0.41,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.50261,
+        "cer_constrained": 0.50324,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.67102,
+        "cer_constrained": 0.67119,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "page_detect": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.53244,
+        "cer_constrained": 0.53239,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.51898,
+        "cer_constrained": 0.51932,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.18847,
+        "cer_constrained": 0.18756,
+        "line_exact_greedy": 0.2875,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.61614,
+        "cer_constrained": 0.61574,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.70381,
+        "cer_constrained": 0.70358,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    }
+  },
+  "before_full": {
+    "crop_training": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.46119,
+        "cer_constrained": 0.45835,
+        "cer_greedy_first39": 0.50122,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.55437,
+        "cer_constrained": 0.55364,
+        "cer_greedy_first39": 0.60404,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.52517,
+        "cer_constrained": 0.52477,
+        "cer_greedy_first39": 0.57288,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.50955,
+        "cer_constrained": 0.51023,
+        "cer_greedy_first39": 0.55718,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.54182,
+        "cer_constrained": 0.54205,
+        "cer_greedy_first39": 0.58962,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "band_split": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.46426,
+        "cer_constrained": 0.46068,
+        "cer_greedy_first39": 0.50526,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.55341,
+        "cer_constrained": 0.55295,
+        "cer_greedy_first39": 0.60295,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.51562,
+        "cer_constrained": 0.51545,
+        "cer_greedy_first39": 0.56173,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.49659,
+        "cer_constrained": 0.49767,
+        "cer_greedy_first39": 0.54167,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.52659,
+        "cer_constrained": 0.5271,
+        "cer_greedy_first39": 0.57269,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    },
+    "page_detect": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.48142,
+        "cer_constrained": 0.47909,
+        "cer_greedy_first39": 0.52429,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.52165,
+        "cer_constrained": 0.52216,
+        "cer_greedy_first39": 0.56891,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.53142,
+        "cer_constrained": 0.53114,
+        "cer_greedy_first39": 0.57904,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.56812,
+        "cer_constrained": 0.56761,
+        "cer_greedy_first39": 0.61718,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.60631,
+        "cer_constrained": 0.60619,
+        "cer_greedy_first39": 0.65513,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      }
+    }
+  },
+  "after_full": {
+    "crop_training": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.61568,
+        "cer_constrained": 0.61506,
+        "cer_greedy_first39": 0.66154,
+        "line_exact_greedy": 0.0,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.41864,
+        "cer_constrained": 0.41773,
+        "cer_greedy_first39": 0.43853,
+        "line_exact_greedy": 0.085,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.37898,
+        "cer_constrained": 0.37773,
+        "cer_greedy_first39": 0.3975,
+        "line_exact_greedy": 0.1175,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.38051,
+        "cer_constrained": 0.37705,
+        "cer_greedy_first39": 0.40026,
+        "line_exact_greedy": 0.11,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.31602,
+        "cer_constrained": 0.31381,
+        "cer_greedy_first39": 0.33115,
+        "line_exact_greedy": 0.1675,
+        "chars_scored": 17600
+      }
+    },
+    "band_split": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.59983,
+        "cer_constrained": 0.59682,
+        "cer_greedy_first39": 0.64436,
+        "line_exact_greedy": 0.005,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.37074,
+        "cer_constrained": 0.37085,
+        "cer_greedy_first39": 0.38494,
+        "line_exact_greedy": 0.1325,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.27574,
+        "cer_constrained": 0.27449,
+        "cer_greedy_first39": 0.28064,
+        "line_exact_greedy": 0.2925,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.33063,
+        "cer_constrained": 0.32875,
+        "cer_greedy_first39": 0.34103,
+        "line_exact_greedy": 0.22,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.27864,
+        "cer_constrained": 0.27653,
+        "cer_greedy_first39": 0.28667,
+        "line_exact_greedy": 0.205,
+        "chars_scored": 17600
+      }
+    },
+    "page_detect": {
+      "24": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.42023,
+        "cer_constrained": 0.41534,
+        "cer_greedy_first39": 0.45429,
+        "line_exact_greedy": 0.005,
+        "chars_scored": 17600
+      },
+      "28": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.10557,
+        "cer_constrained": 0.10301,
+        "cer_greedy_first39": 0.10083,
+        "line_exact_greedy": 0.31,
+        "chars_scored": 17600
+      },
+      "32": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.075,
+        "cer_constrained": 0.07466,
+        "cer_greedy_first39": 0.06622,
+        "line_exact_greedy": 0.4675,
+        "chars_scored": 17600
+      },
+      "36": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.09506,
+        "cer_constrained": 0.0946,
+        "cer_greedy_first39": 0.08917,
+        "line_exact_greedy": 0.42,
+        "chars_scored": 17600
+      },
+      "40": {
+        "records": 200,
+        "path_failures": 0,
+        "cer_greedy": 0.11256,
+        "cer_constrained": 0.11278,
+        "cer_greedy_first39": 0.10763,
+        "line_exact_greedy": 0.4075,
+        "chars_scored": 17600
+      }
+    }
+  }
+}

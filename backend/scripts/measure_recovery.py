@@ -38,6 +38,8 @@ import numpy as np
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import measure_geometry as geometry  # noqa: E402
 from app.ocr.mrz import canonical, data, decode, spec, synth  # noqa: E402
 from app.pipeline.thresholds import DEFAULT_THRESHOLDS  # noqa: E402
 
@@ -66,11 +68,11 @@ def load_session(weights: Path):
     return ort.InferenceSession(str(weights), providers=["CPUExecutionProvider"])
 
 
-def run_model(session, images: list[np.ndarray]) -> np.ndarray:
+def run_model(session, images: list[np.ndarray], normalize=canonical.normalize_line) -> np.ndarray:
     out = []
     for i in range(0, len(images), BATCH):
         chunk = images[i : i + BATCH]
-        batch = np.stack([canonical.normalize_line(im) for im in chunk]).astype(np.float32)[:, None] / 255.0
+        batch = np.stack([normalize(im) for im in chunk]).astype(np.float32)[:, None] / 255.0
         out.append(session.run(["log_probs"], {"images": batch})[0])
     return np.concatenate(out)
 
@@ -87,9 +89,24 @@ def measure(args: argparse.Namespace) -> dict:
     t0 = time.perf_counter()
     rng = random.Random(args.seed)
     records = [synth.generate_record(rng, confusable_bias=args.confusable_bias) for _ in range(args.records)]
-    images = [render_line(line, rng, (0.0, 1.0)) for r in records for line in r.lines]
-    lp = run_model(session, images).reshape(args.records, 2, -1, len(spec.MRZ_CHARSET))
-    print(f"generated + inferred {args.records} records in {time.perf_counter() - t0:.1f}s")
+    path = getattr(args, "path", "crops")
+    page_failures = 0
+    if path == "crops":
+        # The B1g measurement: training-geometry line crops (clipped 704 px renders), whole-crop fit,
+        # exactly as the model was trained.
+        images = [render_line(line, rng, (0.0, 1.0)) for r in records for line in r.lines]
+        lp = run_model(session, images, canonical._fit_whole_crop).reshape(args.records, 2, -1, len(spec.MRZ_CHARSET))
+    else:
+        # Full pages: complete two-line band, severity uniform 0-1, pasted on a page, found by
+        # detect.find_mrz, normalised by the current canonical.normalize_line.
+        per_rec = [geometry.make_lines("page_detect", r.lines, 32, rng, "full") for r in records]
+        kept = [(r, im) for r, im in zip(records, per_rec) if im is not None and len(im) == 2]
+        page_failures = len(records) - len(kept)
+        records = [r for r, _ in kept]
+        images = [x for _, im in kept for x in im]
+        lp = run_model(session, images).reshape(len(records), 2, -1, len(spec.MRZ_CHARSET))
+    print(f"[{path}] generated + inferred {len(records)} records in {time.perf_counter() - t0:.1f}s"
+          f" ({page_failures} page-path failures)")
 
     tot = collections.Counter()
     span = collections.Counter()
@@ -160,9 +177,11 @@ def measure(args: argparse.Namespace) -> dict:
     return {
         "model_version": meta["version"],
         "model_sha256": meta["sha256"],
-        "records": args.records, "lines": lines, "seed": args.seed, "training_seed": TRAIN_SEED,
+        "path": path, "page_path_failures": page_failures,
+        "records": len(records), "lines": lines, "seed": args.seed, "training_seed": TRAIN_SEED,
         "confusable_bias": args.confusable_bias, "severity": "uniform(0,1)",
-        "geometry": "training-geometry single-line crops (NOT the detect.py page path)",
+        "geometry": ("training-geometry single-line crops, whole-crop fit (the B1g measurement)"
+                     if path == "crops" else "full page -> detect.find_mrz -> normalize_line (ink extent)"),
         "all_characters": block(tot),
         "checksum_guarded_span": block(span),
         "line_exact_match": {
@@ -182,7 +201,7 @@ def measure(args: argparse.Namespace) -> dict:
 def summarise(r: dict) -> str:
     a, s = r["all_characters"], r["checksum_guarded_span"]
     lines = [
-        f"model {r['model_version']} | {r['records']} records / {r['lines']} lines | seed {r['seed']} (train {r['training_seed']})",
+        f"[{r['path']}] model {r['model_version']} | {r['records']} records / {r['lines']} lines | seed {r['seed']} (train {r['training_seed']})",
         f"[all chars]   CER greedy {a['cer_greedy']:.4%}  constrained {a['cer_constrained']:.4%}",
         f"              greedy-wrong {a['greedy_wrong_chars']}  corrected {a['corrected_chars']} "
         f"(recovery {a['recovery_rate'] if a['recovery_rate'] is None else format(a['recovery_rate'], '.2%')})  "
@@ -214,9 +233,13 @@ def main() -> None:
     args = p.parse_args()
     if args.records < 2000:
         raise SystemExit("--records must be at least 2000")
-    report = measure(args)
+    report = {}
+    for path in ("crops", "page"):
+        args.path = path
+        report[path] = measure(args)
+        print(summarise(report[path]))
+        print()
     Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(summarise(report))
     print(f"wrote {args.out}")
 
 
