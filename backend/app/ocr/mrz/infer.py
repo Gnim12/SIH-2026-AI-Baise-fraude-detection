@@ -37,7 +37,7 @@ import numpy as np
 import onnxruntime as ort  # type: ignore[import-untyped]
 
 from . import decode, detect, spec
-from .canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH, normalize_line
+from .canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH, LEGACY_CLIPPED_INK_WIDTH, normalize_line
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ class _OnnxModel:
     session: ort.InferenceSession
     line_len: int
     version: str
+    ink_target_width: int
 
 
 @dataclass
@@ -222,9 +223,11 @@ class MRZReader:
         if not isinstance(version, str) or not version:
             raise ModelIntegrityError(f"{metadata_path} has no 'version'.")
         line_len = int(metadata.get("line_len", 44))
+        # The ink framing is part of what a model was trained on: 1.4.0 predates the field.
+        ink_target_width = int(metadata.get("ink_target_width", LEGACY_CLIPPED_INK_WIDTH))
 
         logger.info("MRZReader loaded ONNX weights from %s (sha256=%s...)", weights_path, actual_sha256[:12])
-        return _OnnxModel(session=session, line_len=line_len, version=version)
+        return _OnnxModel(session=session, line_len=line_len, version=version, ink_target_width=ink_target_width)
 
     def read(
         self,
@@ -289,7 +292,7 @@ class MRZReader:
         assert self._model is not None
         results = []
         for line_img in band.lines:
-            resized = normalize_line(line_img)
+            resized = normalize_line(line_img, self._model.ink_target_width)
             batch = resized.astype(np.float32)[None, None, :, :] / 255.0
             log_probs = self._model.session.run([_OUTPUT_NAME], {_INPUT_NAME: batch})[0]
             results.append(log_probs[0])  # drop the batch dim -> (line_len, 37)

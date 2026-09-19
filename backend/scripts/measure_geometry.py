@@ -51,18 +51,29 @@ VISIBLE = 39  # characters that fit in the 704 px canvas the 1.4.0 training set 
 
 
 def render(lines: list[str], height: int, mode: str) -> np.ndarray:
-    """mode 'training': synth.render_mrz_lines as the training set was made (44*16 px wide, so the
-    trailing characters of an 18 px-advance font are clipped). 'full': the same font and size on a
-    canvas wide enough for all 44 characters, i.e. what a real, complete MRZ line looks like."""
-    if mode == "training":
+    """mode 'full': synth.render_mrz_lines (fixed-pitch cells, width from the measured advance: every
+    one of the 44 characters is present). mode 'training': the pre-B1i renderer, kept only to reproduce
+    the clipped 1.4.0 training images (44 x 16 px canvas)."""
+    if mode == "full":
         return synth.render_mrz_lines(lines, char_h=height)
     font = synth._load_mono_font(int(height * 0.8))
-    width = int(font.getlength("A" * 44)) + 4
-    img = Image.new("L", (width, len(lines) * height), color=255)
+    img = Image.new("L", (max(len(l) for l in lines) * 16, len(lines) * height), color=255)
     draw = ImageDraw.Draw(img)
     for i, line in enumerate(lines):
         draw.text((2, i * height + 2), line, fill=0, font=font)
     return np.array(img)
+
+
+_NORMALIZE = canonical.normalize_line
+
+
+def configure(weights: str | Path) -> dict:
+    """Bind the normaliser to the ink width the weights were trained with (metadata.json beside them)."""
+    global _NORMALIZE
+    meta = json.loads((Path(weights).parent / "metadata.json").read_text())
+    width = int(meta.get("ink_target_width", canonical.LEGACY_CLIPPED_INK_WIDTH))
+    _NORMALIZE = lambda im: canonical.normalize_line(im, width)  # noqa: E731
+    return meta
 
 
 def make_lines(path: str, lines: list[str], height: int, rng: random.Random, mode: str) -> list[np.ndarray] | None:
@@ -88,7 +99,7 @@ def make_lines(path: str, lines: list[str], height: int, rng: random.Random, mod
 def infer(session, images: list[np.ndarray]) -> np.ndarray:
     outs = []
     for i in range(0, len(images), BATCH):
-        batch = np.stack([canonical.normalize_line(im) for im in images[i : i + BATCH]])
+        batch = np.stack([_NORMALIZE(im) for im in images[i : i + BATCH]])
         outs.append(session.run(["log_probs"], {"images": batch.astype(np.float32)[:, None] / 255.0})[0])
     return np.concatenate(outs)
 
@@ -126,7 +137,7 @@ def evaluate(session, path: str, height: int, records: int, seed: int, mode: str
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--label", required=True, help="key in the report, e.g. before, after_full")
-    p.add_argument("--render", choices=("training", "full"), default="training")
+    p.add_argument("--render", choices=("training", "full"), default="full")
     p.add_argument("--normalizer", choices=("current", "legacy"), default="current",
                    help="legacy = the pre-B1h whole-crop fit, for the 'before' rows")
     p.add_argument("--paths", default=",".join(PATHS), help="comma-separated subset of paths")
@@ -142,8 +153,10 @@ def main() -> None:
 
     import onnxruntime as ort
 
+    meta = configure(args.weights)
     if args.normalizer == "legacy":
-        canonical.normalize_line = canonical._fit_whole_crop  # type: ignore[assignment]
+        global _NORMALIZE
+        _NORMALIZE = canonical._fit_whole_crop  # type: ignore[assignment]
     session = ort.InferenceSession(args.weights, providers=["CPUExecutionProvider"])
     result: dict = {}
     t0 = time.perf_counter()
@@ -159,7 +172,7 @@ def main() -> None:
     report = json.loads(out.read_text()) if out.exists() else {}
     report.setdefault(args.label, {}).update(result)
     report["meta"] = {"records": args.records, "seed": args.seed, "severity": "uniform(0,1)",
-                      "heights": list(HEIGHTS), "visible_chars": VISIBLE, "note": "CER = wrong chars / all 88 chars per record; "
+                      "heights": list(HEIGHTS), "model_version": meta.get("version"), "visible_chars": VISIBLE, "note": "CER = wrong chars / all 88 chars per record; "
                       "path failures count as fully wrong"}
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"done in {time.perf_counter() - t0:.0f}s -> {out}")

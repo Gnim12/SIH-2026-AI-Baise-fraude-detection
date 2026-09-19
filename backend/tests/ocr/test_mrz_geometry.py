@@ -127,7 +127,8 @@ def test_training_collate_and_inference_normalisation_agree(tmp_path: Path):
 # --- page path accuracy (needs the installed weights) -------------------------
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
-WEIGHTS = BACKEND_ROOT / "models" / "mrz_crnn" / "1.4.0" / "model.onnx"
+INSTALLED_VERSIONS = sorted((BACKEND_ROOT / "models" / "mrz_crnn").glob("*/model.onnx"))
+WEIGHTS = INSTALLED_VERSIONS[-1] if INSTALLED_VERSIONS else BACKEND_ROOT / "models" / "mrz_crnn" / "none" / "model.onnx"
 TWO_LINE_BASELINE_CER = 0.026  # B1g: two lines at 32 px split evenly, severity 0.3
 
 
@@ -147,6 +148,7 @@ def test_page_path_error_is_at_or_below_the_two_line_baseline():
     sys.modules["measure_geometry_t"] = mod
     spec_.loader.exec_module(mod)
 
+    mod.configure(WEIGHTS)
     session = ort.InferenceSession(str(WEIGHTS), providers=["CPUExecutionProvider"])
     rng = random.Random(4242)
     wrong = total = 0
@@ -183,3 +185,11 @@ def test_detect_deskew_removes_tilt_instead_of_doubling_it():
     for line in found.lines:
         ext = canonical.ink_extent(line)
         assert ext is not None and (ext[1] - ext[0] + 1) >= 0.97 * (ref[1] - ref[0] + 1)
+
+
+def test_target_ink_width_fits_all_44_characters_in_the_canvas():
+    assert canonical.TARGET_INK_LEFT + canonical.TARGET_INK_WIDTH <= canonical.CANONICAL_WIDTH - canonical.TARGET_INK_LEFT
+    assert canonical.TARGET_INK_WIDTH == 688
+    out = canonical.normalize_line(render_full(FULL_LINE))
+    x0, x1, _, _ = canonical.ink_extent(out)
+    assert x0 >= canonical.TARGET_INK_LEFT - 2 and x1 <= canonical.CANONICAL_WIDTH - canonical.TARGET_INK_LEFT + 2

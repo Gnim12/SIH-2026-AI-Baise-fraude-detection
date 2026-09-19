@@ -33,6 +33,8 @@ import numpy as np
 from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+RENDER_VERSION = 2  # 1: fixed 16 px pitch canvas that clipped the last ~5 characters; 2: measured pitch
+LEGACY_FREE_SEED = 20260920
 synth: ModuleType
 spec: ModuleType
 
@@ -44,6 +46,7 @@ class ManifestRow:
     label: str
     severity: float
     seed: int
+    glyph_h: int = 0  # rendered line height in px (B1i: sampled per record, not a fixed 32)
 
 
 def _worker_init() -> None:
@@ -76,16 +79,19 @@ def _generate_one(args: tuple[int, int, float, Path]) -> tuple[list[ManifestRow]
         raise AssertionError(f"generated record failed self-validation: {record.lines}")
 
     severity = rng.uniform(0.0, 1.0)
+    from app.ocr.mrz.data import GLYPH_HEIGHT_RANGE  # noqa: PLC0415
+
+    glyph_h = rng.randint(*GLYPH_HEIGHT_RANGE)
     rows: list[ManifestRow] = []
     for line_index, line_text in enumerate(record.lines):
-        clean = synth.render_mrz_lines([line_text], char_h=32)
+        clean = synth.render_mrz_lines([line_text], char_h=glyph_h)
         degraded = synth.degrade(clean, rng, severity=severity)
         filename = f"{record_seed:08d}_{line_index}.png"
         Image.fromarray(degraded).save(split_dir / filename)
         rows.append(
             ManifestRow(
                 filename=filename, line_index=line_index, label=line_text,
-                severity=severity, seed=record_seed,
+                severity=severity, seed=record_seed, glyph_h=glyph_h,
             )
         )
     record_key = "|".join(record.lines)
@@ -132,7 +138,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--val", type=int, default=12_000)
     parser.add_argument("--test", type=int, default=12_000)
     parser.add_argument("--confusable-bias", type=float, default=0.5)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=LEGACY_FREE_SEED,
+                        help="must not be 42: the 42-seeded 1.4.0 set was rendered with a clipping bug")
     parser.add_argument("--workers", type=int, default=max(1, (mp.cpu_count() or 1) - 1))
     parser.add_argument("--out", type=str, default="data/mrz")
     return parser.parse_args()
@@ -140,6 +147,8 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    if args.seed == 42:
+        raise SystemExit("seed 42 produced the invalid (clipped) 1.4.0 dataset; choose another seed")
     out_dir = PROJECT_ROOT / args.out
 
     splits = [("train", args.train), ("val", args.val), ("test", args.test)]
@@ -179,6 +188,7 @@ def main() -> None:
     print("split-disjointness check OK: no source record appears in two splits")
 
     manifest_summary = {
+        "render_version": RENDER_VERSION,
         "seed": args.seed,
         "confusable_bias": args.confusable_bias,
         "splits": {

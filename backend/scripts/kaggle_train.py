@@ -99,6 +99,9 @@ def stage_clone(args: argparse.Namespace, work: Path) -> Path:
     return backend
 
 
+RENDER_VERSION = 2  # keep in step with scripts/gen_mrz_dataset.py
+
+
 def stage_deps() -> None:
     banner("2/5 deps")
     needed = {"onnx": "onnx", "onnxruntime": "onnxruntime", "PIL": "pillow", "scipy": "scipy", "numpy": "numpy"}
@@ -116,12 +119,16 @@ def stage_dataset(args: argparse.Namespace, backend: Path, data_dir: Path) -> No
     banner("3/5 dataset")
     summary = data_dir / "dataset_summary.json"
     if summary.exists():
-        done = json.loads(summary.read_text())["splits"]
-        if (done["train"]["n_records"], done["val"]["n_records"], done["test"]["n_records"]) == (
+        info = json.loads(summary.read_text())
+        done = info["splits"]
+        same_size = (done["train"]["n_records"], done["val"]["n_records"], done["test"]["n_records"]) == (
             args.train_records, args.val_records, args.test_records,
-        ):
+        )
+        # B1i: a size match alone once would have reused the invalid clipped set.
+        if same_size and info.get("seed") == args.seed and info.get("render_version") == RENDER_VERSION:
             print(f"dataset already generated at {data_dir}, skipping")
             return
+        print("existing dataset differs in size, seed or render version -- regenerating", flush=True)
         shutil.rmtree(data_dir)
     run([
         sys.executable, "scripts/gen_mrz_dataset.py",
@@ -178,6 +185,32 @@ def stage_export(args: argparse.Namespace, backend: Path, ckpt_dir: Path, artifa
             print(f"  {path.relative_to(artifacts)}  ({path.stat().st_size:,} bytes)", flush=True)
 
 
+def stage_publish(args: argparse.Namespace, artifacts: Path) -> None:
+    """Save the artifacts as a private Kaggle Dataset through the API, so they outlive the notebook
+    session (the 1.4.0 run's output was nearly lost to a version save). Best effort: a missing
+    credential is reported loudly but does not fail the run, since the files are still in /kaggle/working."""
+    banner("6/6 publish artifacts as a Kaggle Dataset")
+    if args.smoke or args.no_publish:
+        print("skipped (smoke run or --no-publish)")
+        return
+    try:
+        from kaggle.api.kaggle_api_extended import KaggleApi  # noqa: PLC0415
+
+        api = KaggleApi()
+        api.authenticate()
+        user = api.get_config_value("username") or os.environ.get("KAGGLE_USERNAME")
+        slug = f"mrz-crnn-{args.version.replace('.', '-')}"
+        (artifacts / "dataset-metadata.json").write_text(json.dumps({
+            "title": f"MRZ CRNN {args.version}", "id": f"{user}/{slug}",
+            "licenses": [{"name": "other"}],
+        }))
+        api.dataset_create_new(str(artifacts), public=False, quiet=False, dir_mode="zip")
+        print(f"published private dataset {user}/{slug}", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"!! could not publish the Kaggle Dataset ({type(exc).__name__}: {exc}). "
+              f"Artifacts remain in {artifacts}: download or 'Save Version' them NOW.", flush=True)
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--smoke", action="store_true", help="tiny end-to-end plumbing run (not a real training run)")
@@ -185,19 +218,20 @@ def main() -> None:
     p.add_argument("--branch", default=None)
     p.add_argument("--repo-dir", default=None, help="use an existing checkout instead of cloning")
     p.add_argument("--work-dir", default=None, help="default: /kaggle/working if it exists, else ./kaggle_work")
-    p.add_argument("--version", default="1.4.0")
+    p.add_argument("--version", default="1.5.0")
     p.add_argument("--train-records", type=int, default=120_000)
     p.add_argument("--val-records", type=int, default=12_000)
     p.add_argument("--test-records", type=int, default=12_000)
     p.add_argument("--confusable-bias", type=float, default=0.5)
-    p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--seed", type=int, default=20260920, help="must not be 42 (the invalid 1.4.0 dataset)")
+    p.add_argument("--epochs", type=int, default=12)
     p.add_argument("--batch", type=int, default=128)
     p.add_argument("--workers", type=int, default=os.cpu_count() or 2, help="dataset generation processes")
     p.add_argument("--loader-workers", type=int, default=2, help="DataLoader workers during training")
     p.add_argument("--max-steps-per-epoch", type=int, default=None)
     p.add_argument("--time-budget-hours", type=float, default=10.5,
                    help="stop starting new epochs after this long so export still happens inside Kaggle's 12h limit")
+    p.add_argument("--no-publish", action="store_true", help="do not create the Kaggle Dataset at the end")
     p.add_argument("--allow-cpu", action="store_true", help="permit a full run without a GPU (very slow)")
     args = p.parse_args()
 
@@ -230,6 +264,8 @@ def main() -> None:
     stage_dataset(args, backend, data_dir)
     train_ok = stage_train(args, backend, data_dir, ckpt_dir)
     stage_export(args, backend, ckpt_dir, artifacts)
+
+    stage_publish(args, artifacts)
 
     banner(f"done in {(time.time() - started) / 60:.1f} min" + ("" if train_ok else " (training exited abnormally)"))
     sys.exit(0 if train_ok else 1)

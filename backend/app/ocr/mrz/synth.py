@@ -12,6 +12,7 @@ letter sequences, not drawn from any real-name corpus.
 from __future__ import annotations
 
 import io
+import math
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -203,16 +204,65 @@ def _load_mono_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def render_mrz_lines(lines: list[str], *, char_w: int = 16, char_h: int = 28) -> np.ndarray:
-    """Render MRZ lines as a single grayscale image, one row of monospace text per line."""
-    width = max(len(l) for l in lines) * char_w
+RENDER_MARGIN_PX = 4  # blank border on every side of a rendered band
+FONT_SIZE_FRACTION = 0.8  # font size as a fraction of the line height
+
+
+class RenderClippedError(RuntimeError):
+    """A rendered MRZ line lost characters off the edge of its canvas."""
+
+
+def font_advance(char_h: int) -> float:
+    """Character pitch at the font size used for `char_h`: the widest advance of any MRZ character,
+    measured from the font itself. Hinted fonts round advances to whole pixels and the vendored OCR-B
+    varies by 1-2 px between glyphs, so it is neither a fixed ratio nor uniform; a real MRZ is fixed-pitch,
+    so every character is drawn in its own cell of this width."""
+    font = _load_mono_font(int(char_h * FONT_SIZE_FRACTION))
+    return float(max(font.getlength(c) for c in spec.MRZ_CHARSET))
+
+
+def render_mrz_lines(lines: list[str], *, char_h: int = 28) -> np.ndarray:
+    """Render MRZ lines as a single grayscale image, one row of monospace text per line.
+
+    The canvas width is computed from the font's measured advance --
+    `n_chars * advance + 2 * margin` -- never a constant: a fixed 16 px pitch once cut the last ~5
+    of 44 characters (including both check digits) off every training image. The result is
+    checked, and RenderClippedError raised, if any text touches the canvas edge or the ink does
+    not span the expected width.
+    """
+    n_chars = max(len(l) for l in lines)
+    advance = font_advance(char_h)
+    width = int(math.ceil(n_chars * advance)) + 2 * RENDER_MARGIN_PX
     height = len(lines) * char_h
     img = Image.new("L", (width, height), color=255)
     draw = ImageDraw.Draw(img)
-    font = _load_mono_font(int(char_h * 0.8))
+    font = _load_mono_font(int(char_h * FONT_SIZE_FRACTION))
     for i, line in enumerate(lines):
-        draw.text((2, i * char_h + 2), line, fill=0, font=font)
-    return np.array(img)
+        for j, ch in enumerate(line):
+            x = RENDER_MARGIN_PX + j * advance + (advance - font.getlength(ch)) / 2
+            draw.text((x, i * char_h + 2), ch, fill=0, font=font)
+    arr = np.array(img)
+    _assert_not_clipped(arr, lines, advance, char_h)
+    return arr
+
+
+def _assert_not_clipped(arr: np.ndarray, lines: list[str], advance: float, char_h: int) -> None:
+    ink = arr < 128
+    cols = np.flatnonzero(ink.any(axis=0))
+    rows = np.flatnonzero(ink.any(axis=1))
+    if cols.size == 0:
+        raise RenderClippedError("rendered MRZ has no ink at all")
+    n_chars = max(len(l) for l in lines)
+    # Every character cell must be inside the image: ink reaches into the last cell, leaves
+    # the edges clear, and never touches the top/bottom rows either.
+    last_cell_start = RENDER_MARGIN_PX + (n_chars - 1) * advance
+    if arr.shape[1] - 1 in cols or 0 in cols or 0 in rows or arr.shape[0] - 1 in rows:
+        raise RenderClippedError(f"ink touches the canvas edge (canvas {arr.shape}, char_h {char_h})")
+    if cols[-1] < last_cell_start:
+        raise RenderClippedError(
+            f"ink ends at column {cols[-1]} but the last of {n_chars} characters starts at "
+            f"{last_cell_start:.0f} (canvas {arr.shape[1]} px, advance {advance})"
+        )
 
 
 def degrade(image: np.ndarray, rng: random.Random, *, severity: float = 0.5) -> np.ndarray:

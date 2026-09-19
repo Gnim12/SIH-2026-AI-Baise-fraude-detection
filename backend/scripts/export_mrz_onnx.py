@@ -26,7 +26,7 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ocr.mrz.canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH  # noqa: E402
+from app.ocr.mrz.canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH, TARGET_INK_WIDTH  # noqa: E402
 from app.ocr.mrz.model import MrzCRNN, NUM_CLASSES, _ConvBackbone  # noqa: E402
 
 INPUT_NAME = "images"
@@ -129,6 +129,7 @@ def export(
         "output_name": OUTPUT_NAME,
         "input_height": TARGET_HEIGHT,
         "input_width": width,
+        "ink_target_width": TARGET_INK_WIDTH,
         "opset": OPSET,
         "sha256": sha256,
         "training_config": training_config,

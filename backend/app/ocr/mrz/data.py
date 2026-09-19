@@ -33,6 +33,17 @@ from .spec import MRZ_CHARSET
 CHAR_TO_IDX = {c: i for i, c in enumerate(MRZ_CHARSET)}
 TARGET_HEIGHT = CANONICAL_HEIGHT
 
+# Augmentation ranges (B1i). Measured failure modes of the fixed-slot head: it saw a single glyph
+# size, so 24 px input was 42% wrong and 28-40 px 10-11%.
+GLYPH_HEIGHT_RANGE = (22, 44)  # rendered line height in px (font size = 0.8 x this)
+OFFSET_JITTER_FRAC = 0.04  # horizontal offset, +/- fraction of the rendered width
+OFFSET_JITTER_V_PX = 2  # vertical offset, +/- px
+# Post-normalisation jitter simulating an imperfect ink-extent estimate at inference (faint fillers,
+# speckle): normalize_line removes any pre-normalisation shift or scale, so without this the offset
+# augmentation above would be cancelled out before the network sees it.
+CANVAS_SCALE_JITTER = 0.03
+CANVAS_SHIFT_JITTER_PX = 8
+
 
 @dataclass
 class MrzSample:
@@ -52,8 +63,10 @@ class SyntheticMrzLineDataset(Dataset[MrzSample]):
         base_seed: int = 0,
         severity_range: tuple[float, float] = (0.1, 0.8),
         confusable_bias: float = 0.0,
-        jitter_frac: float = 0.03,
+        jitter_frac: float = OFFSET_JITTER_FRAC,
+        glyph_height_range: tuple[int, int] = GLYPH_HEIGHT_RANGE,
     ):
+        self.glyph_height_range = glyph_height_range
         self.size = size
         self.base_seed = base_seed
         self.severity_range = severity_range
@@ -70,9 +83,9 @@ class SyntheticMrzLineDataset(Dataset[MrzSample]):
         line_text = record.lines[line_idx]
 
         severity = rng.uniform(*self.severity_range)
-        clean = synth.render_mrz_lines([line_text], char_h=TARGET_HEIGHT)
+        clean = synth.render_mrz_lines([line_text], char_h=rng.randint(*self.glyph_height_range))
         degraded = synth.degrade(clean, rng, severity=severity)
-        degraded = horizontal_jitter(degraded, rng, max_frac=self.jitter_frac)
+        degraded = offset_jitter(degraded, rng, h_frac=self.jitter_frac)
         return MrzSample(image=degraded, text=line_text)
 
 
@@ -101,13 +114,48 @@ def horizontal_jitter(image: np.ndarray, rng: random.Random, *, max_frac: float 
     return shifted
 
 
+def offset_jitter(
+    image: np.ndarray, rng: random.Random, *, h_frac: float = OFFSET_JITTER_FRAC, v_px: int = OFFSET_JITTER_V_PX
+) -> np.ndarray:
+    """Shift the text by up to +/-h_frac of the width and +/-v_px rows by *padding* one side with
+    background, never by rolling or cropping: nothing may leave the image, because a clipped
+    character is exactly the bug that made the 1.4.0 training set unreadable at its tail."""
+    if h_frac <= 0.0 and v_px <= 0:
+        return image
+    h, w = image.shape
+    max_px = int(round(w * h_frac))
+    dx = rng.randint(-max_px, max_px)
+    dy = rng.randint(-v_px, v_px)
+    bg = int(np.percentile(image, 90))
+    return np.pad(
+        image, ((max(dy, 0), max(-dy, 0)), (max(dx, 0), max(-dx, 0))), mode="constant", constant_values=bg
+    )
+
+
+def jitter_canvas(canvas: np.ndarray, rng: random.Random) -> np.ndarray:
+    """Small random scale and shift of an already-normalised (H, W) canvas."""
+    from PIL import Image
+
+    scale = 1.0 + rng.uniform(-CANVAS_SCALE_JITTER, CANVAS_SCALE_JITTER)
+    shift = rng.uniform(-CANVAS_SHIFT_JITTER_PX, CANVAS_SHIFT_JITTER_PX)
+    h, w = canvas.shape
+    bg = int(np.percentile(canvas, 90))
+    # affine maps output (x, y) -> input (a*x + b, y): scale about the canvas centre, then shift
+    a = 1.0 / scale
+    b = (w / 2) * (1 - a) - shift * a
+    out = Image.fromarray(canvas).transform(
+        (w, h), Image.Transform.AFFINE, (a, 0, b, 0, 1, 0), resample=Image.Resampling.BILINEAR, fillcolor=bg
+    )
+    return np.array(out)
+
+
 def encode_text(text: str, line_len: int) -> torch.Tensor:
     if len(text) != line_len:
         raise ValueError(f"label length {len(text)} does not match line_len {line_len}: {text!r}")
     return torch.tensor([CHAR_TO_IDX[c] for c in text], dtype=torch.long)
 
 
-def collate_batch(samples: list[MrzSample]) -> dict[str, torch.Tensor]:
+def collate_batch(samples: list[MrzSample], *, canvas_jitter: bool = False) -> dict[str, torch.Tensor]:
     """Normalise every crop to the canonical (32, CANONICAL_WIDTH) canvas --
     the same `normalize_line` infer.py applies at inference, so train and
     serve see identical geometry -- and stack fixed-length per-slot integer
@@ -116,7 +164,10 @@ def collate_batch(samples: list[MrzSample]) -> dict[str, torch.Tensor]:
     line_len = len(samples[0].text)
     batch_images = torch.zeros(len(samples), 1, CANONICAL_HEIGHT, CANONICAL_WIDTH)
     for i, sample in enumerate(samples):
-        batch_images[i, 0] = torch.from_numpy(normalize_line(sample.image)).float() / 255.0
+        canvas = normalize_line(sample.image)
+        if canvas_jitter:
+            canvas = jitter_canvas(canvas, random)  # type: ignore[arg-type]  # module-level RNG
+        batch_images[i, 0] = torch.from_numpy(canvas).float() / 255.0
 
     targets = torch.stack([encode_text(s.text, line_len) for s in samples])
     return {"images": batch_images, "targets": targets}
@@ -165,7 +216,7 @@ class MrzDiskDataset(Dataset[MrzSample]):
     synth.py's generation cost on every epoch once a fixed set exists.
     """
 
-    def __init__(self, split_dir: str | Path, *, jitter_frac: float = 0.03, seed: int = 0):
+    def __init__(self, split_dir: str | Path, *, jitter_frac: float = OFFSET_JITTER_FRAC, seed: int = 0):
         self.split_dir = Path(split_dir)
         manifest_path = self.split_dir / "manifest.jsonl"
         with manifest_path.open("r", encoding="utf-8") as f:
@@ -182,7 +233,7 @@ class MrzDiskDataset(Dataset[MrzSample]):
         image = np.array(Image.open(image_path).convert("L"))
         if self.jitter_frac > 0.0:
             rng = random.Random(self.seed * 1_000_003 + index)
-            image = horizontal_jitter(image, rng, max_frac=self.jitter_frac)
+            image = offset_jitter(image, rng, h_frac=self.jitter_frac)
         return MrzSample(image=image, text=row["label"])
 
 

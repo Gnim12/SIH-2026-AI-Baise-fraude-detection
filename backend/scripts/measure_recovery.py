@@ -57,9 +57,9 @@ def guarded_positions() -> set[tuple[int, int]]:
 
 
 def render_line(text: str, rng: random.Random, severity_range: tuple[float, float]) -> np.ndarray:
-    clean = synth.render_mrz_lines([text], char_h=data.TARGET_HEIGHT)
+    clean = synth.render_mrz_lines([text], char_h=rng.randint(*data.GLYPH_HEIGHT_RANGE))
     degraded = synth.degrade(clean, rng, severity=rng.uniform(*severity_range))
-    return data.horizontal_jitter(degraded, rng, max_frac=0.03)
+    return data.offset_jitter(degraded, rng)
 
 
 def load_session(weights: Path):
@@ -68,7 +68,8 @@ def load_session(weights: Path):
     return ort.InferenceSession(str(weights), providers=["CPUExecutionProvider"])
 
 
-def run_model(session, images: list[np.ndarray], normalize=canonical.normalize_line) -> np.ndarray:
+def run_model(session, images: list[np.ndarray], normalize=None) -> np.ndarray:
+    normalize = normalize or geometry._NORMALIZE
     out = []
     for i in range(0, len(images), BATCH):
         chunk = images[i : i + BATCH]
@@ -82,7 +83,7 @@ def measure(args: argparse.Namespace) -> dict:
         raise SystemExit(f"--seed must differ from the training seed ({TRAIN_SEED})")
     weights = Path(args.weights)
     session = load_session(weights)
-    meta = json.loads((weights.parent / "metadata.json").read_text())
+    meta = geometry.configure(weights)
     guarded = guarded_positions()
     margin = DEFAULT_THRESHOLDS.mrz_recovery_confidence_margin
 
@@ -92,10 +93,9 @@ def measure(args: argparse.Namespace) -> dict:
     path = getattr(args, "path", "crops")
     page_failures = 0
     if path == "crops":
-        # The B1g measurement: training-geometry line crops (clipped 704 px renders), whole-crop fit,
-        # exactly as the model was trained.
+        # Single-line crops from the training-style renderer (glyph height 22-44, offset jitter).
         images = [render_line(line, rng, (0.0, 1.0)) for r in records for line in r.lines]
-        lp = run_model(session, images, canonical._fit_whole_crop).reshape(args.records, 2, -1, len(spec.MRZ_CHARSET))
+        lp = run_model(session, images).reshape(args.records, 2, -1, len(spec.MRZ_CHARSET))
     else:
         # Full pages: complete two-line band, severity uniform 0-1, pasted on a page, found by
         # detect.find_mrz, normalised by the current canonical.normalize_line.
@@ -114,6 +114,8 @@ def measure(args: argparse.Namespace) -> dict:
     per_char_all = collections.defaultdict(collections.Counter)
     suspect = collections.Counter()
     status = collections.Counter()
+    pos_wrong = np.zeros((2, 44))
+    n_records = len(records)
 
     for rec, rec_lp in zip(records, lp):
         d = decode.decode_mrz([rec_lp[0], rec_lp[1]], spec.MrzFormat.TD3)
@@ -123,6 +125,7 @@ def measure(args: argparse.Namespace) -> dict:
             tot["lines"] += 1
             tot["line_exact_greedy"] += g == truth
             tot["line_exact_constrained"] += c == truth
+            pos_wrong[li] += [a != b for a, b in zip(g, truth)]
             for pos, (tc, gc, cc) in enumerate(zip(truth, g, c)):
                 bucket = [tot] + ([span] if (li, pos) in guarded else [])
                 for b in bucket:
@@ -180,7 +183,7 @@ def measure(args: argparse.Namespace) -> dict:
         "path": path, "page_path_failures": page_failures,
         "records": len(records), "lines": lines, "seed": args.seed, "training_seed": TRAIN_SEED,
         "confusable_bias": args.confusable_bias, "severity": "uniform(0,1)",
-        "geometry": ("training-geometry single-line crops, whole-crop fit (the B1g measurement)"
+        "geometry": ("single-line crops from the training renderer (glyph 22-44 px, offset jitter)"
                      if path == "crops" else "full page -> detect.find_mrz -> normalize_line (ink extent)"),
         "all_characters": block(tot),
         "checksum_guarded_span": block(span),
@@ -189,6 +192,10 @@ def measure(args: argparse.Namespace) -> dict:
             "constrained": rate(tot["line_exact_constrained"], lines),
         },
         "records_status": dict(status),
+        "per_position_error_greedy": {
+            f"line{li + 1}": {str(p): round(float(pos_wrong[li][p] / n_records), 4) for p in range(44)}
+            for li in range(2)
+        },
         "per_character_guarded_span": per_char_block(per_char),
         "per_character_all": per_char_block(per_char_all),
         "recoveries": {
@@ -216,6 +223,9 @@ def summarise(r: dict) -> str:
         if v["greedy_wrong"] or v["harmed"]:
             rr = "  -  " if v["recovery_rate"] is None else f"{v['recovery_rate']:.0%}"
             lines.append(f"   {ch!r:>5} {v['n']:6d} {v['greedy_wrong']:6d} {v['corrected']:6d}  {rr:>5} {v['harmed']:5d}")
+    pp = r["per_position_error_greedy"]
+    lines.append("per-position greedy error, positions 38-43:  " + "  ".join(
+        f"L{li}:" + ",".join(f"{pp[f'line{li}'][str(p)]:.1%}" for p in range(38, 44)) for li in (1, 2)))
     rc = r["recoveries"]
     lines.append(f"recoveries: {rc['total']} total | suspect {rc.get('suspect_recoveries', 0)} "
                  f"(correct {rc.get('suspect_correct', 0)}) | unsuspected {rc.get('unsuspected_recoveries', 0)} "
@@ -234,7 +244,7 @@ def main() -> None:
     if args.records < 2000:
         raise SystemExit("--records must be at least 2000")
     report = {}
-    for path in ("crops", "page"):
+    for path in ("page", "crops"):
         args.path = path
         report[path] = measure(args)
         print(summarise(report[path]))

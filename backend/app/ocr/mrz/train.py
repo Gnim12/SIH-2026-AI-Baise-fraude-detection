@@ -26,6 +26,8 @@ import torch
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader, Subset
 
+from functools import partial
+
 from .data import MrzDiskDataset, MrzSample, SyntheticMrzLineDataset, WidthBucketedSampler, collate_batch
 from .model import MrzCRNN
 from .spec import MRZ_CHARSET
@@ -144,7 +146,7 @@ def train(
             severity_range=severity_range, jitter_frac=jitter_frac,
         )
         sampler = WidthBucketedSampler(dataset, batch_size=batch_size)
-        loader = DataLoader[MrzSample](dataset, batch_sampler=sampler, collate_fn=collate_batch)
+        loader = DataLoader[MrzSample](dataset, batch_sampler=sampler, collate_fn=partial(collate_batch, canvas_jitter=True))
 
         model.train()
         epoch_loss = 0.0
@@ -218,7 +220,9 @@ def train_from_disk(
 
     train_dataset = MrzDiskDataset(train_dir)
     val_dataset = MrzDiskDataset(val_dir, jitter_frac=0.0)
-    train_loader = DataLoader[MrzSample](train_dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_batch)
+    train_loader = DataLoader[MrzSample](
+        train_dataset, batch_size=batch_size, shuffle=True, collate_fn=partial(collate_batch, canvas_jitter=True)
+    )
     val_loader = DataLoader[MrzSample](val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate_batch)
 
     checkpoint_dir = Path(checkpoint_dir)
@@ -351,7 +355,7 @@ def train_disk_curriculum(
         lo, hi = severity_for_step(epoch, max(epochs - 1, 1), start=(0.0, 0.3), end=(0.0, 1.0))
         indices = [i for i, sv in enumerate(severities) if lo <= sv <= hi]
         loader = DataLoader[MrzSample](
-            Subset(train_ds, indices), batch_size=batch_size, shuffle=True, collate_fn=collate_batch,
+            Subset(train_ds, indices), batch_size=batch_size, shuffle=True, collate_fn=partial(collate_batch, canvas_jitter=True),
             num_workers=num_workers, drop_last=True, pin_memory=device == "cuda",
         )
 

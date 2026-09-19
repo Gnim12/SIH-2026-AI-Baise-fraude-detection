@@ -24,14 +24,18 @@ CANONICAL_WIDTH = 700
 CANONICAL_HEIGHT = 32
 _BACKGROUND = 255
 
-# Where the ink of a FULL 44-character line sits, in the frame the 1.4.0 weights
-# were trained on. Measured on unclipped OCR-B renders at 25 px (advance 18 px):
-# ink 785 px wide (780-788), rows 7..25. The training renders were cut off at
-# 704 px, so the canvas below only ever showed the first ~39 characters; this
-# reproduces that exactly. When the dataset renderer is fixed and the model
-# retrained (B1i), TARGET_INK_WIDTH becomes ~CANONICAL_WIDTH - 2 * TARGET_INK_LEFT.
+# Where the ink of a FULL 44-character line sits on the canvas. Training and
+# inference both go through normalize_line, so the network always sees the ink
+# box below; the only requirement is that all 44 characters fit, with a
+# symmetric margin. Derived, not assumed: the left margin is TARGET_INK_LEFT
+# px and the right margin is the same, so the ink is CANONICAL_WIDTH minus both
+# = 688 px, i.e. 15.6 px per character cell of the 44 the head reads. (1.4.0's
+# weights were trained on renders that clipped the last ~5 characters and needed
+# 785 here to reproduce that; retrained 1.5.0 weights do not.)
 TARGET_INK_LEFT = 6
-TARGET_INK_WIDTH = 785
+TARGET_INK_WIDTH = CANONICAL_WIDTH - 2 * TARGET_INK_LEFT
+# Weights whose metadata.json has no "ink_target_width" (1.4.0) were trained on clipped renders.
+LEGACY_CLIPPED_INK_WIDTH = 785
 TARGET_INK_TOP = 7.0
 TARGET_INK_HEIGHT = 19.0
 
@@ -102,16 +106,17 @@ def _fit_whole_crop(image: NDArray[np.uint8]) -> NDArray[np.uint8]:
     return canvas
 
 
-def normalize_line(image: NDArray[np.uint8]) -> NDArray[np.uint8]:
+def normalize_line(image: NDArray[np.uint8], target_ink_width: int | None = None) -> NDArray[np.uint8]:
     """Map a grayscale line crop to the (CANONICAL_HEIGHT, CANONICAL_WIDTH) canvas.
 
     Crop to the ink extent (plus INK_MARGIN_PX), scale it so the ink box is
-    TARGET_INK_WIDTH x TARGET_INK_HEIGHT (x and y independently, since a
+    `target_ink_width` (default TARGET_INK_WIDTH; a model's metadata may name another) x
+    TARGET_INK_HEIGHT (x and y independently, since a
     hinted font, a camera or a printer all change the glyph aspect), and paste
     it with the ink's top-left at (TARGET_INK_LEFT, TARGET_INK_TOP). Padding
     and glyph height in the input therefore do not change the output. Nothing
-    inside the ink box is cropped before pasting; the canvas edge then clips
-    the tail exactly as it did in training. The input must hold the whole line.
+    inside the ink box is cropped before pasting; all 44 characters fit the canvas.
+    The input must hold the whole line.
     Falls back to whole-crop fitting when no text is detected.
     """
     if image.ndim != 2:
@@ -126,7 +131,7 @@ def normalize_line(image: NDArray[np.uint8]) -> NDArray[np.uint8]:
     cy0, cy1 = max(0, y0 - INK_MARGIN_PX), min(h, y1 + 1 + INK_MARGIN_PX)
     crop = image[cy0:cy1, cx0:cx1]
 
-    scale_x = TARGET_INK_WIDTH / (x1 - x0 + 1)
+    scale_x = (TARGET_INK_WIDTH if target_ink_width is None else target_ink_width) / (x1 - x0 + 1)
     scale_y = TARGET_INK_HEIGHT / (y1 - y0 + 1)
     new_w = max(1, int(round(crop.shape[1] * scale_x)))
     new_h = max(1, int(round(crop.shape[0] * scale_y)))
