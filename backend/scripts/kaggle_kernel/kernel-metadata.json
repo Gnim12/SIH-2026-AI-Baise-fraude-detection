@@ -1,0 +1,13 @@
+{
+  "id": "christianbrice/mrz-crnn-1-5-0-train",
+  "title": "mrz-crnn-1-5-0-train",
+  "code_file": "run_training.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_internet": "true",
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
