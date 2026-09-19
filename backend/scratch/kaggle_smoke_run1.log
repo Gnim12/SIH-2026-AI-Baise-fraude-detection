@@ -1,0 +1,58 @@
+
+==============================================================================
+[02:42:49] 1/5 clone
+==============================================================================
+backend root: C:\Users\brice\StudioProjects\HACKATHON\backend
+
+==============================================================================
+[02:42:49] 2/5 deps
+==============================================================================
+all dependencies already present
+torch 2.13.0+cpu, cuda available: False
+
+==============================================================================
+[02:43:01] 3/5 dataset
+==============================================================================
+$ C:\Users\brice\StudioProjects\HACKATHON\backend\.venv\Scripts\python.exe scripts/gen_mrz_dataset.py --train 60 --val 12 --test 12 --confusable-bias 0.5 --seed 42 --workers 2 --out scratch\kaggle_smoke\data\mrz_smoke
+train: 60 records -> 120 line samples written to C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\train
+val: 12 records -> 24 line samples written to C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\val
+test: 12 records -> 24 line samples written to C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\test
+generated 84 records (168 line samples) in 12.4s -> 13.6 samples/sec with 2 workers
+split-disjointness check OK: no source record appears in two splits
+wrote C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\dataset_summary.json
+
+==============================================================================
+[02:43:15] 4/5 train (resumes from last.pt if present)
+==============================================================================
+$ C:\Users\brice\StudioProjects\HACKATHON\backend\.venv\Scripts\python.exe -u -m app.ocr.mrz.train --disk --train-dir C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\train --val-dir C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\data\mrz_smoke\val --checkpoint-dir C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\checkpoints --epochs 2 --batch 8 --workers 0 --max-steps-per-epoch 2
+epoch 1/2  loss=3.5272  window=[0.00,0.30]  char_acc=0.4328  line_acc=0.0000  CONFUSABLE_ACC=0.0000  *best*  27.6s
+    per-char: B=0.000 I=0.000 O=0.000 S=0.000 Z=0.000 0=0.000 1=0.000 2=0.000 5=0.000 8=0.000
+epoch 2/2  loss=3.1817  window=[0.00,1.00]  char_acc=0.4441  line_acc=0.0000  CONFUSABLE_ACC=0.0000  *best*  22.3s
+    per-char: B=0.000 I=0.000 O=0.000 S=0.000 Z=0.000 0=0.000 1=0.000 2=0.000 5=0.000 8=0.000
+
+==============================================================================
+[02:44:27] 5/5 export
+==============================================================================
+$ C:\Users\brice\StudioProjects\HACKATHON\backend\.venv\Scripts\python.exe scripts/export_mrz_onnx.py --checkpoint scratch\kaggle_smoke\checkpoints\best.pt --version 0.0.0-smoke --models-dir scratch\kaggle_smoke\artifacts\models --training-config {"epochs": 2, "batch": 8, "confusable_bias": 0.5, "seed": 42, "train_records": 60, "val_records": 12, "test_records": 12, "smoke": true}
+C:\Users\brice\StudioProjects\HACKATHON\backend\scripts\export_mrz_onnx.py:99: DeprecationWarning: You are using the legacy TorchScript-based ONNX export. Starting in PyTorch 2.9, the new torch.export-based ONNX exporter has become the default. Learn more about the new export logic: https://docs.pytorch.org/docs/stable/onnx_export.html. For exporting control flow: https://pytorch.org/tutorials/beginner/onnx/export_control_flow_model_to_onnx_tutorial.html
+  torch.onnx.export(model, (dummy,), str(onnx_path), dynamo=False, **export_kwargs)
+C:\Users\brice\StudioProjects\HACKATHON\backend\app\ocr\mrz\model.py:81: TracerWarning: Converting a tensor to a Python boolean might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!
+  if features.shape[2] != 1:
+C:\Users\brice\StudioProjects\HACKATHON\backend\.venv\Lib\site-packages\torch\onnx\_internal\torchscript_exporter\symbolic_opset9.py:4462: UserWarning: Exporting a model to ONNX with a batch_size other than 1, with a variable length with LSTM can cause an error when running the ONNX model with a different batch size. Make sure to save the model with a batch size of 1, or define the initial states (h0/c0) as inputs of the model. 
+  return _generic_rnn(
+updated C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\artifacts\models\manifest.json: placeholder=false, sha256=843ebe71aac3...
+exported C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\artifacts\models\mrz_crnn\0.0.0-smoke\model.onnx
+onnx vs pytorch max abs diff: 4.77e-07
+cpu latency: 224.90ms mean, 493.75ms p95
+
+artifacts in C:\Users\brice\StudioProjects\HACKATHON\backend\scratch\kaggle_smoke\artifacts:
+  metrics.jsonl  (695 bytes)
+  models\manifest.json  (2,772 bytes)
+  models\mrz_crnn\0.0.0-smoke\metadata.json  (826 bytes)
+  models\mrz_crnn\0.0.0-smoke\model.onnx  (34,895,356 bytes)
+  train.log  (422 bytes)
+
+==============================================================================
+[02:44:56] done in 2.1 min
+==============================================================================
+exit=0

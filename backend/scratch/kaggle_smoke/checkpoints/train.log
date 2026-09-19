@@ -1,0 +1,4 @@
+epoch 1/2  loss=3.5272  window=[0.00,0.30]  char_acc=0.4328  line_acc=0.0000  CONFUSABLE_ACC=0.0000  *best*  27.6s
+    per-char: B=0.000 I=0.000 O=0.000 S=0.000 Z=0.000 0=0.000 1=0.000 2=0.000 5=0.000 8=0.000
+epoch 2/2  loss=3.1817  window=[0.00,1.00]  char_acc=0.4441  line_acc=0.0000  CONFUSABLE_ACC=0.0000  *best*  22.3s
+    per-char: B=0.000 I=0.000 O=0.000 S=0.000 Z=0.000 0=0.000 1=0.000 2=0.000 5=0.000 8=0.000

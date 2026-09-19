@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import random
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -26,19 +27,47 @@ _DIGITS = "0123456789"
 # real registry -- they only need to be 3 letters for MRZ layout purposes.
 _COUNTRY_POOL = ["UTO", "ZZA", "XKX", "TST", "QAX", "FAK", "SYN", "DEM"]
 
+# The classic OCR-B confusable set -- also what decode.fake_logprobs biases
+# its simulated misreads toward, and the pairs the checksum decoder exists to
+# recover. Oversampling these in free-text fields gives the training set more
+# examples of the exact confusions the decoder is meant to be good at.
+_CONFUSABLE_CHARS = set("0O1I5S8B2Z")
 
-def _rand_letters(rng: random.Random, min_len: int, max_len: int) -> str:
+
+def _weighted_pool(alphabet: str, confusable_bias: float) -> tuple[list[str], list[float]]:
+    """Build a (population, weights) pair for `rng.choices`: characters in
+    `_CONFUSABLE_CHARS` get `1 + confusable_bias` weight, everything else 1.
+    `confusable_bias=0.0` reduces exactly to uniform sampling."""
+    population = list(alphabet)
+    weights = [1.0 + confusable_bias if c in _CONFUSABLE_CHARS else 1.0 for c in population]
+    return population, weights
+
+
+def _rand_letters(rng: random.Random, min_len: int, max_len: int, confusable_bias: float = 0.0) -> str:
     n = rng.randint(min_len, max_len)
-    return "".join(rng.choice(_ALPHA) for _ in range(n))
+    if confusable_bias <= 0.0:
+        return "".join(rng.choice(_ALPHA) for _ in range(n))
+    population, weights = _weighted_pool(_ALPHA, confusable_bias)
+    return "".join(rng.choices(population, weights=weights, k=n))
 
 
-def _rand_digits(rng: random.Random, n: int) -> str:
-    return "".join(rng.choice(_DIGITS) for _ in range(n))
+def _rand_digits(rng: random.Random, n: int, confusable_bias: float = 0.0) -> str:
+    if confusable_bias <= 0.0:
+        return "".join(rng.choice(_DIGITS) for _ in range(n))
+    population, weights = _weighted_pool(_DIGITS, confusable_bias)
+    return "".join(rng.choices(population, weights=weights, k=n))
 
 
-def _rand_doc_number(rng: random.Random) -> str:
+def _rand_doc_number(rng: random.Random, confusable_bias: float = 0.0) -> str:
+    """Only the characters are biased; the document-number check digit is
+    computed from the finished string in build_td3_record, so it is always
+    consistent regardless of bias."""
     n = rng.randint(6, 9)
-    body = "".join(rng.choice(_ALPHA + _DIGITS) for _ in range(n))
+    if confusable_bias <= 0.0:
+        body = "".join(rng.choice(_ALPHA + _DIGITS) for _ in range(n))
+    else:
+        population, weights = _weighted_pool(_ALPHA + _DIGITS, confusable_bias)
+        body = "".join(rng.choices(population, weights=weights, k=n))
     return body.ljust(9, spec.FILLER)
 
 
@@ -121,19 +150,28 @@ def build_td3_record(
     )
 
 
-def generate_record(rng: random.Random) -> SyntheticRecord:
+def generate_record(rng: random.Random, *, confusable_bias: float = 0.0) -> SyntheticRecord:
     """Build one internally-consistent, fictional TD3 MRZ record with
-    randomised field values."""
-    surname = _rand_letters(rng, 3, 10)
-    given_names = _rand_letters(rng, 3, 10) + (
-        " " + _rand_letters(rng, 3, 8) if rng.random() < 0.3 else ""
+    randomised field values.
+
+    `confusable_bias`: oversamples the classic OCR-B confusable characters
+    (0/O, 1/I, 5/S, 8/B, 2/Z) in surname, given names, the optional
+    personal-number field and the document number. Dates and country codes
+    stay uniform, and every check digit is computed from the finished field
+    text, so every record still self-validates regardless of the bias value.
+    Default 0.0 is uniform sampling, unchanged from before this parameter
+    existed.
+    """
+    surname = _rand_letters(rng, 3, 10, confusable_bias)
+    given_names = _rand_letters(rng, 3, 10, confusable_bias) + (
+        " " + _rand_letters(rng, 3, 8, confusable_bias) if rng.random() < 0.3 else ""
     )
-    doc_number = _rand_doc_number(rng)
+    doc_number = _rand_doc_number(rng, confusable_bias)
     nationality = rng.choice(_COUNTRY_POOL)
     sex = rng.choice("MF")
     birth_raw = _rand_date(rng, year_lo=1950, year_hi=2010)
     expiry_raw = _rand_date(rng, year_lo=2024, year_hi=2033)
-    personal_number = "" if rng.random() < 0.6 else _rand_digits(rng, rng.randint(4, 14))
+    personal_number = "" if rng.random() < 0.6 else _rand_digits(rng, rng.randint(4, 14), confusable_bias)
 
     return build_td3_record(
         surname=surname, given_names=given_names, doc_number=doc_number,
@@ -143,7 +181,20 @@ def generate_record(rng: random.Random) -> SyntheticRecord:
     )
 
 
+# Vendored OCR-B (see assets/fonts/OCRB-LICENSE.txt for provenance/terms).
+# This is the real MRZ font, not a substitute: OCR-B was designed so 0/O,
+# 1/I and 5/S are visually distinct, which is exactly the confusion set the
+# checksum-constrained decoder (decode.py) is meant to recover from -- a
+# fallback monospace font trains the model on a differently-shaped problem.
+_OCRB_PATH = Path(__file__).resolve().parents[3] / "assets" / "fonts" / "OCRB.ttf"
+
+
 def _load_mono_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    if _OCRB_PATH.exists():
+        try:
+            return ImageFont.truetype(str(_OCRB_PATH), size)
+        except OSError:
+            pass
     for candidate in ("consola.ttf", "cour.ttf", "DejaVuSansMono.ttf"):
         try:
             return ImageFont.truetype(candidate, size)
@@ -167,7 +218,7 @@ def render_mrz_lines(lines: list[str], *, char_w: int = 16, char_h: int = 28) ->
 def degrade(image: np.ndarray, rng: random.Random, *, severity: float = 0.5) -> np.ndarray:
     """Print-scan style degradation: blur, noise, contrast/brightness jitter,
     slight resample, and mild JPEG-style compression loss. `severity` in [0, 1]."""
-    from scipy.ndimage import gaussian_filter, rotate
+    from scipy.ndimage import gaussian_filter, rotate  # type: ignore[import-untyped]
 
     arr = image.astype(np.float32)
 
@@ -188,9 +239,9 @@ def degrade(image: np.ndarray, rng: random.Random, *, severity: float = 0.5) -> 
     if severity > 0.3:
         scale = rng.uniform(0.6, 0.9)
         small = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).resize(
-            (max(1, int(arr.shape[1] * scale)), max(1, int(arr.shape[0] * scale))), Image.BILINEAR
+            (max(1, int(arr.shape[1] * scale)), max(1, int(arr.shape[0] * scale))), Image.Resampling.BILINEAR
         )
-        arr = np.array(small.resize((arr.shape[1], arr.shape[0]), Image.BILINEAR), dtype=np.float32)
+        arr = np.array(small.resize((arr.shape[1], arr.shape[0]), Image.Resampling.BILINEAR), dtype=np.float32)
 
     if severity > 0.5 and rng.random() < 0.4:
         buf = io.BytesIO()
@@ -203,9 +254,11 @@ def degrade(image: np.ndarray, rng: random.Random, *, severity: float = 0.5) -> 
     return np.clip(arr, 0, 255).astype(np.uint8)
 
 
-def generate_synthetic_page(rng: random.Random, *, severity: float = 0.5) -> tuple[SyntheticRecord, np.ndarray]:
+def generate_synthetic_page(
+    rng: random.Random, *, severity: float = 0.5, confusable_bias: float = 0.0
+) -> tuple[SyntheticRecord, np.ndarray]:
     """Generate one record and its degraded rendered MRZ image."""
-    record = generate_record(rng)
+    record = generate_record(rng, confusable_bias=confusable_bias)
     clean = render_mrz_lines(record.lines)
     return record, degrade(clean, rng, severity=severity)
 
@@ -231,5 +284,29 @@ if __name__ == "__main__":
     print(f"  rendered + degraded one sample page: shape={image.shape}, dtype={image.dtype}, "
           f"doc_number={record.doc_number}, surname={record.surname}")
     assert image.ndim == 2 and image.dtype == np.uint8
+
+    # confusable_bias: every record must still self-validate, and the biased
+    # free-text fields must show a measurably higher confusable-character rate.
+    def _confusable_rate(records: list[SyntheticRecord]) -> float:
+        text = "".join(r.surname + r.given_names + r.personal_number for r in records)
+        text = text.replace(" ", "").replace("<", "")
+        if not text:
+            return 0.0
+        return sum(1 for c in text if c in _CONFUSABLE_CHARS) / len(text)
+
+    bias_rng = random.Random(7)
+    unbiased = [generate_record(bias_rng, confusable_bias=0.0) for _ in range(200)]
+    biased = [generate_record(bias_rng, confusable_bias=0.6) for _ in range(200)]
+
+    biased_passed = sum(1 for r in biased if spec.parse_td3(r.lines).all_valid)
+    assert biased_passed == 200, f"only {biased_passed}/200 confusable_bias=0.6 records self-validated"
+
+    rate_unbiased = _confusable_rate(unbiased)
+    rate_biased = _confusable_rate(biased)
+    print(f"  confusable_bias=0.0 free-text confusable-char rate: {rate_unbiased:.3f}")
+    print(f"  confusable_bias=0.6 free-text confusable-char rate: {rate_biased:.3f}")
+    assert rate_biased > rate_unbiased, "confusable_bias=0.6 did not raise the confusable-char rate"
+    print(f"  200/200 confusable_bias=0.6 records passed check-digit validation, "
+          f"confusable rate {rate_unbiased:.3f} -> {rate_biased:.3f}")
 
     print("synth.py self-test OK")

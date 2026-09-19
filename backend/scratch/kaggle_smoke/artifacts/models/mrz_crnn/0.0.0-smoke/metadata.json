@@ -1,0 +1,31 @@
+{
+  "version": "0.0.0-smoke",
+  "line_len": 44,
+  "num_classes": 37,
+  "input_name": "images",
+  "output_name": "log_probs",
+  "input_height": 32,
+  "input_width": 700,
+  "opset": 17,
+  "sha256": "843ebe71aac30e485490fb59516b610e701dfe027b282c3b02a8767875b268db",
+  "training_config": {
+    "epochs": 2,
+    "batch": 8,
+    "confusable_bias": 0.5,
+    "seed": 42,
+    "train_records": 60,
+    "val_records": 12,
+    "test_records": 12,
+    "smoke": true
+  },
+  "metrics": {
+    "char_accuracy": 0.4441287878787879,
+    "line_accuracy": 0.0,
+    "confusable_accuracy": 0.0,
+    "epoch": 2
+  },
+  "onnx_vs_pytorch_max_abs_diff": 4.76837158203125e-07,
+  "cpu_latency_ms_per_crop_mean": 224.89942000393057,
+  "cpu_latency_ms_per_crop_p95": 493.7489000119968,
+  "exported_at": "2026-09-18T21:14:55Z"
+}

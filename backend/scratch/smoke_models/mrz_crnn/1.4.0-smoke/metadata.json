@@ -1,0 +1,27 @@
+{
+  "version": "1.4.0-smoke",
+  "line_len": 44,
+  "num_classes": 37,
+  "input_name": "images",
+  "output_name": "log_probs",
+  "input_height": 32,
+  "input_width": 700,
+  "opset": 17,
+  "sha256": "bafd69cdb27e702b1f53486cc67cacca02503f30e62301234035f6cd3170d622",
+  "training_config": {
+    "steps": 500,
+    "batch": 32,
+    "dataset": "data/mrz_smoke",
+    "note": "plumbing smoke run, not a trained model"
+  },
+  "metrics": {
+    "char_accuracy": 0.8444318181818182,
+    "line_accuracy": 0.0675,
+    "confusable_accuracy": 0.7207317073170731,
+    "epoch": null
+  },
+  "onnx_vs_pytorch_max_abs_diff": 1.239776611328125e-05,
+  "cpu_latency_ms_per_crop_mean": 151.420949997555,
+  "cpu_latency_ms_per_crop_p95": 231.2397599947873,
+  "exported_at": "2026-09-18T18:44:10Z"
+}

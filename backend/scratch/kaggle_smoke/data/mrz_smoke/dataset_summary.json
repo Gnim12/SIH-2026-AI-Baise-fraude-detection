@@ -1,0 +1,27 @@
+{
+  "seed": 42,
+  "confusable_bias": 0.5,
+  "splits": {
+    "train": {
+      "n_records": 60,
+      "n_line_samples": 120,
+      "severity_min": 0.03755908098900418,
+      "severity_max": 0.990832987441177,
+      "severity_mean": 0.49056672199540313
+    },
+    "val": {
+      "n_records": 12,
+      "n_line_samples": 24,
+      "severity_min": 0.017781047397714578,
+      "severity_max": 0.9932100125736508,
+      "severity_mean": 0.5173714324659741
+    },
+    "test": {
+      "n_records": 12,
+      "n_line_samples": 24,
+      "severity_min": 0.037593364003752905,
+      "severity_max": 0.9517862539024479,
+      "severity_mean": 0.5228754548162378
+    }
+  }
+}

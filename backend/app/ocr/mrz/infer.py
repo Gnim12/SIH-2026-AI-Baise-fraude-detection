@@ -26,20 +26,41 @@ This must never happen silently in production:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
+import onnxruntime as ort  # type: ignore[import-untyped]
 
 from . import decode, detect, spec
+from .canonical import CANONICAL_HEIGHT, CANONICAL_WIDTH, normalize_line
 
 logger = logging.getLogger(__name__)
+
+_INPUT_NAME = "images"
+_OUTPUT_NAME = "log_probs"
 
 
 class MissingWeightsError(RuntimeError):
     pass
+
+
+class ModelIntegrityError(RuntimeError):
+    """Raised when the on-disk ONNX weights don't match what the model
+    registry (models/manifest.json) says should be running -- a placeholder
+    still in place, a missing file, or a hash mismatch. Never caught and
+    silently downgraded to stub mode: a swapped or corrupt model in a border
+    system is a security incident, not a fallback path."""
+
+
+@dataclass
+class _OnnxModel:
+    session: ort.InferenceSession
+    line_len: int
 
 
 @dataclass
@@ -113,11 +134,64 @@ class MRZReader:
             "If you are seeing this outside a test, something is misconfigured."
         )
 
-    def _load_model(self, weights_path: Path):
-        raise NotImplementedError(
-            "real CRNN checkpoint loading is not implemented yet -- "
-            f"no trained weights exist to load from {weights_path} (see BACKEND_BRIEF.md §1.3)"
-        )
+    def _load_model(self, weights_path: Path) -> "_OnnxModel":
+        """Verify the on-disk ONNX weights against models/manifest.json, then
+        create one onnxruntime.InferenceSession, reused for every subsequent
+        `read()` call -- session creation is not cheap and must not happen
+        per-request."""
+        # weights_path is models/mrz_crnn/{version}/model.onnx; the registry
+        # lives two directories up, at models/manifest.json.
+        models_dir = weights_path.parents[2]
+        manifest_path = models_dir / "manifest.json"
+        if not manifest_path.exists():
+            raise ModelIntegrityError(f"model registry not found at {manifest_path}")
+
+        manifest = json.loads(manifest_path.read_text())
+        entry = manifest.get("mrz_crnn")
+        if entry is None:
+            raise ModelIntegrityError(f"no 'mrz_crnn' entry in {manifest_path}")
+
+        if entry.get("placeholder", True):
+            raise ModelIntegrityError(
+                f"models/manifest.json marks mrz_crnn as a placeholder (version="
+                f"{entry.get('version')!r}) -- there is no trained model to load. "
+                "Train the CRNN (train.py), export it (scripts/export_mrz_onnx.py), "
+                "which clears the placeholder flag, before constructing MRZReader "
+                "with require_trained_weights=True."
+            )
+
+        if not weights_path.exists():
+            raise ModelIntegrityError(f"weights file missing: {weights_path}")
+
+        actual_sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()
+        expected_sha256 = entry.get("sha256")
+        if actual_sha256 != expected_sha256:
+            raise ModelIntegrityError(
+                f"SHA-256 mismatch for {weights_path}: manifest expects "
+                f"{expected_sha256!r}, file hashes to {actual_sha256!r}. Refusing to "
+                "load -- a silently swapped model file is a security incident, not "
+                "something to load anyway."
+            )
+
+        session = ort.InferenceSession(str(weights_path), providers=["CPUExecutionProvider"])
+
+        # Width guard: a dynamic axis reads back as a string/None, a fixed one
+        # as an int -- anything other than exactly canonical geometry is refused.
+        input_shape = tuple(session.get_inputs()[0].shape)
+        if input_shape[2:] != (CANONICAL_HEIGHT, CANONICAL_WIDTH):
+            raise ModelIntegrityError(
+                f"{weights_path} expects input (height, width)={input_shape[2:]} but this "
+                f"code normalises crops to ({CANONICAL_HEIGHT}, {CANONICAL_WIDTH}) "
+                "(app/ocr/mrz/canonical.py). The model was exported for a different "
+                "geometry; re-export it or fix CANONICAL_WIDTH. Refusing to feed it "
+                "mis-sized crops."
+            )
+
+        metadata_path = weights_path.parent / "metadata.json"
+        line_len = json.loads(metadata_path.read_text())["line_len"] if metadata_path.exists() else 44
+
+        logger.info("MRZReader loaded ONNX weights from %s (sha256=%s...)", weights_path, actual_sha256[:12])
+        return _OnnxModel(session=session, line_len=line_len)
 
     def read(
         self,
@@ -126,6 +200,14 @@ class MRZReader:
         stub_ground_truth: Optional[list[str]] = None,
         mrz_format: spec.MrzFormat = spec.MrzFormat.TD3,
     ) -> MrzReadResult:
+        if stub_ground_truth is not None and not self.stub_mode:
+            raise ValueError(
+                "stub_ground_truth is only usable when MRZReader was constructed with "
+                "require_trained_weights=False (test-only). Passing it against a real "
+                "model is refused rather than silently ignored, so a test fixture can "
+                "never accidentally leak into a production call path."
+            )
+
         band = detect.find_mrz(image, n_lines=spec.LINE_SHAPE[mrz_format][0])
         if band is None:
             return MrzReadResult(
@@ -158,9 +240,17 @@ class MRZReader:
         return self._to_result(decoded, band)
 
     def _run_model(self, band: detect.MrzBand) -> list[np.ndarray]:
-        raise NotImplementedError(
-            "real CRNN forward pass is not implemented yet -- no trained weights (see BACKEND_BRIEF.md §1.3)"
-        )
+        """Run the loaded ONNX session over each line of `band`, returning
+        one (line_len, 37) log-probability array per line -- exactly the
+        shape decode.decode_mrz expects, no CTC collapse needed."""
+        assert self._model is not None
+        results = []
+        for line_img in band.lines:
+            resized = normalize_line(line_img)
+            batch = resized.astype(np.float32)[None, None, :, :] / 255.0
+            log_probs = self._model.session.run([_OUTPUT_NAME], {_INPUT_NAME: batch})[0]
+            results.append(log_probs[0])  # drop the batch dim -> (line_len, 37)
+        return results
 
     def _to_result(self, decoded: decode.MrzDecodeResult, band: detect.MrzBand) -> MrzReadResult:
         parsed = decoded.parsed
