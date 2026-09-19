@@ -183,9 +183,11 @@ def test_missing_and_mismatched_weights_are_unavailable(models_dir):
 
 
 @pytest.mark.real_mrz
-def test_app_boots_with_weights_missing_and_reports_node_unavailable():
-    # The repo manifest's mrz_crnn entry is a placeholder: nothing to load.
-    runtime.reset_mrz_runtime()
+def test_app_boots_with_weights_missing_and_reports_node_unavailable(monkeypatch):
+    # The repo manifest now carries real weights, so simulate the placeholder
+    # state the app must still boot in.
+    monkeypatch.setattr(runtime, "_runtime", runtime._unavailable(
+        "the MRZ model is still a placeholder: no trained weights have been installed."))
     from app.main import app
 
     with TestClient(app) as client:

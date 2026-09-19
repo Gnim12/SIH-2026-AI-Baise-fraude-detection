@@ -57,11 +57,10 @@ class RegistryEntry:
 # BACKEND_BRIEF.md §1.5's table, field for field.
 REGISTRY: list[RegistryEntry] = [
     RegistryEntry(
-        key="mrz_crnn", version="1.3.0", rel_path="models/mrz_crnn/1.3.0/model.onnx",
-        placeholder=True,
-        reason="the CRNN (app/ocr/mrz/model.py) has no trained checkpoint yet -- "
-               "training needs a GPU this environment doesn't have. MRZReader runs "
-               "in stub mode (require_trained_weights=False) until this is trained.",
+        key="mrz_crnn", version="1.4.0", rel_path="models/mrz_crnn/1.4.0/model.onnx",
+        placeholder=False,
+        note="Trained fixed-slot CRNN (mrz-crnn-slot). Installed by hand from the training export; "
+             "metadata.json beside the weights is the source of the pin version.",
     ),
     RegistryEntry(
         key="rapidocr_det", version="v5", rel_path="models/rapidocr_det/v5/det.onnx",

@@ -7,11 +7,11 @@
     "version": "buffalo_l"
   },
   "mrz_crnn": {
-    "note": "the CRNN (app/ocr/mrz/model.py) has no trained checkpoint yet -- training needs a GPU this environment doesn't have. MRZReader runs in stub mode (require_trained_weights=False) until this is trained.",
-    "path": "models/mrz_crnn/1.3.0/model.onnx",
-    "placeholder": true,
-    "sha256": "cfc101badafdee029b0ebf4a5670f3f344508fc4f7392deb700d96476caf6618",
-    "version": "1.3.0"
+    "note": "Trained fixed-slot CRNN (mrz-crnn-slot). metadata.json beside the weights is the source of the pin version.",
+    "path": "models/mrz_crnn/1.4.0/model.onnx",
+    "placeholder": false,
+    "sha256": "9084b6285e23253bdd88a3381bdaf50ec90bc2b285dbfa6ae90ac8218db1e7a8",
+    "version": "1.4.0"
   },
   "pad_minifas": {
     "note": "presentation-attack detection is part of the face branch, stub until M4.",

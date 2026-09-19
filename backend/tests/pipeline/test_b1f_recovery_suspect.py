@@ -42,7 +42,9 @@ def test_no_ctc_architecture_name_in_backend_app():
 
 def test_registry_label_matches_frontend_and_model_pins_name():
     assert REGISTRY_BY_ID[StageId.MRZ_READ].label == "MRZ read · fixed-slot CRNN"
-    from app.storage.b2_repositories import MODEL_PINS
+    from app.storage.b2_repositories import current_model_pins
+
+    MODEL_PINS = current_model_pins()
 
     assert "mrz-crnn-slot" in MODEL_PINS and not any("ctc" in k for k in MODEL_PINS)
 

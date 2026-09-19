@@ -59,9 +59,21 @@ THRESHOLD_DEF_BY_ID = {d["id"]: d for d in THRESHOLD_DEFS}
 
 # BACKEND_BRIEF.md §1.5-adjacent: model pins are read-only over HTTP (spec
 # §4) -- there is deliberately no endpoint anywhere that writes this dict.
-MODEL_PINS: dict[str, str] = {
-    "mrz-crnn-slot": "1.2.0", "rapidocr": "1.3.1", "resnet": "0.7.2", "arcface": "1.1.0",
-}
+#
+# The MRZ version is never a constant here: it feeds sealed, hash-linked audit
+# entries, so it is read from the loaded model's metadata.json (the same source
+# /api/health reports). A model that is not live is recorded as "unavailable"
+# rather than as a version that is not running.
+_STATIC_MODEL_PINS: dict[str, str] = {"rapidocr": "1.3.1", "resnet": "0.7.2", "arcface": "1.1.0"}
+
+
+def current_model_pins() -> dict[str, str]:
+    from app.ocr.mrz.infer import MRZ_PIN_NAME
+    from app.ocr.mrz.runtime import get_mrz_runtime
+
+    status = get_mrz_runtime().status
+    return {MRZ_PIN_NAME: status.version if status.state == "live" and status.version else "unavailable",
+            **_STATIC_MODEL_PINS}
 
 
 def _now() -> datetime.datetime:
@@ -198,7 +210,7 @@ async def submit_decision(
         db, entry_type="decision", terminal_id=terminal_id, officer_id=officer_id,
         session_id=session_id, run_id=run_id, evidence_hashes=evidence_hashes,
         signal_ids=all_signal_ids, finding_dispositions=finding_dispositions,
-        model_pins=MODEL_PINS, thresholds=thresholds, recommendation=recommendation,
+        model_pins=current_model_pins(), thresholds=thresholds, recommendation=recommendation,
         officer_action=action, divergence=divergence,
         divergence_reason=divergence_reason if divergence != "none" else None, notes=notes,
     )
@@ -360,7 +372,7 @@ async def update_thresholds(
     seal = await chain.append(
         db, entry_type="config_change", terminal_id=terminal_id, officer_id=officer_id,
         session_id=None, run_id=None, evidence_hashes=[], signal_ids=[], finding_dispositions=[],
-        model_pins=MODEL_PINS, thresholds={c["id"]: c["newValue"] for c in change_rows},
+        model_pins=current_model_pins(), thresholds={c["id"]: c["newValue"] for c in change_rows},
         recommendation=None, officer_action=None, divergence=None, divergence_reason=None,
         notes=reason,
     )
