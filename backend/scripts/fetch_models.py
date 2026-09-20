@@ -57,7 +57,7 @@ class RegistryEntry:
 # BACKEND_BRIEF.md §1.5's table, field for field.
 REGISTRY: list[RegistryEntry] = [
     RegistryEntry(
-        key="mrz_crnn", version="1.4.0", rel_path="models/mrz_crnn/1.4.0/model.onnx",
+        key="mrz_crnn", version="1.5.0", rel_path="models/mrz_crnn/1.5.0/model.onnx",
         placeholder=False,
         note="Trained fixed-slot CRNN (mrz-crnn-slot). Installed by hand from the training export; "
              "metadata.json beside the weights is the source of the pin version.",

@@ -1,0 +1,374 @@
+{
+  "version": "1.4.0",
+  "documents": [
+    {
+      "doc": 0,
+      "severity": 0.0,
+      "chars_wrong": 2,
+      "cer": 0.0227,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_LINE2",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 1,
+      "severity": 0.091,
+      "chars_wrong": 2,
+      "cer": 0.0227,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_LINE2",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 2,
+      "severity": 0.182,
+      "chars_wrong": 1,
+      "cer": 0.0114,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 3,
+      "severity": 0.273,
+      "chars_wrong": 1,
+      "cer": 0.0114,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 4,
+      "severity": 0.364,
+      "chars_wrong": 3,
+      "cer": 0.0341,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 1,
+        "suspect": 0,
+        "meanRawConfidence": 0.467124342918396,
+        "meanRecoveredConfidence": 0.20147043466567993
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 5,
+      "severity": 0.455,
+      "chars_wrong": 3,
+      "cer": 0.0341,
+      "lines_exact": [
+        false,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 6,
+      "severity": 0.545,
+      "chars_wrong": 9,
+      "cer": 0.1023,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 1,
+        "suspect": 1,
+        "meanRawConfidence": 0.6139063835144043,
+        "meanRecoveredConfidence": 0.12696360051631927
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_RECOVERY_SUSPECT",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 7,
+      "severity": 0.636,
+      "chars_wrong": 2,
+      "cer": 0.0227,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_CHECKSUM_FAIL_LINE2",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 8,
+      "severity": 0.727,
+      "chars_wrong": 46,
+      "cer": 0.5227,
+      "lines_exact": [
+        false,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 3,
+        "suspect": 1,
+        "meanRawConfidence": 0.5432535310586294,
+        "meanRecoveredConfidence": 0.17019624658860266
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_CHECKSUM_FAIL_LINE2",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_RECOVERY_SUSPECT",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 9,
+      "severity": 0.818,
+      "chars_wrong": 55,
+      "cer": 0.625,
+      "lines_exact": [
+        false,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 1,
+        "suspect": 1,
+        "meanRawConfidence": 0.999902606010437,
+        "meanRecoveredConfidence": 2.4101052986225113e-05
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_CHECKSUM_FAIL_LINE2",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_RECOVERY_SUSPECT",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 10,
+      "severity": 0.909,
+      "chars_wrong": 1,
+      "cer": 0.0114,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    },
+    {
+      "doc": 11,
+      "severity": 1.0,
+      "chars_wrong": 1,
+      "cer": 0.0114,
+      "lines_exact": [
+        true,
+        false
+      ],
+      "gate1_passed": false,
+      "gate1_state": "failed",
+      "recovery_stats": {
+        "totalCharacters": 88,
+        "recovered": 0,
+        "suspect": 0,
+        "meanRawConfidence": null,
+        "meanRecoveredConfidence": null
+      },
+      "signals": [
+        "MRZ_CHECKSUM_FAIL_COMPOSITE",
+        "MRZ_DECODE_UNRECOVERABLE",
+        "MRZ_VIZ_FIELD_UNREADABLE_BIRTH_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_DOC_NUMBER",
+        "MRZ_VIZ_FIELD_UNREADABLE_EXPIRY_DATE",
+        "MRZ_VIZ_FIELD_UNREADABLE_NATIONALITY",
+        "MRZ_VIZ_FIELD_UNREADABLE_SEX",
+        "MRZ_VIZ_FIELD_UNREADABLE_SURNAME"
+      ],
+      "model_pin": "mrz-crnn-slot 1.4.0"
+    }
+  ],
+  "gate1_pass": "0/12",
+  "composite_fail_fired": "10/12",
+  "mean_cer": 0.1193
+}

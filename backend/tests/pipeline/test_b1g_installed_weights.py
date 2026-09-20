@@ -1,6 +1,6 @@
 """Milestone B1g: the trained MRZ weights are installed, verified, and pinned.
 
-Uses the real files under models/mrz_crnn/1.4.0/ (gitignored *.onnx: the
+Uses the real files under models/mrz_crnn/1.5.0/ (gitignored *.onnx: the
 tests that need the weights skip when they are not present on this machine).
 """
 from __future__ import annotations
@@ -25,7 +25,7 @@ from app.ocr.mrz.infer import MRZ_PIN_NAME, ModelIntegrityError, MRZReader
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 MODELS = BACKEND_ROOT / "models"
-INSTALLED = MODELS / "mrz_crnn" / "1.4.0"
+INSTALLED = MODELS / "mrz_crnn" / "1.5.0"
 needs_weights = pytest.mark.skipif(not (INSTALLED / "model.onnx").exists(), reason="trained weights not installed")
 
 
@@ -45,7 +45,7 @@ def test_manifest_hash_matches_installed_file_and_metadata():
     entry = _manifest_entry()
     actual = hashlib.sha256((INSTALLED / "model.onnx").read_bytes()).hexdigest()
     assert entry["placeholder"] is False
-    assert entry["version"] == "1.4.0" and entry["path"] == "models/mrz_crnn/1.4.0/model.onnx"
+    assert entry["version"] == "1.5.0" and entry["path"] == "models/mrz_crnn/1.5.0/model.onnx"
     assert entry["sha256"] == actual == json.loads((INSTALLED / "metadata.json").read_text())["sha256"]
 
 
@@ -68,10 +68,10 @@ def test_pin_version_comes_from_metadata_not_a_constant(tmp_path, monkeypatch, f
 
     # Change only metadata.json in a copy: the pin must follow it.
     root = tmp_path / "models"
-    (root / "mrz_crnn" / "1.4.0").mkdir(parents=True)
-    shutil.copy(INSTALLED / "model.onnx", root / "mrz_crnn/1.4.0/model.onnx")
+    (root / "mrz_crnn" / "1.5.0").mkdir(parents=True)
+    shutil.copy(INSTALLED / "model.onnx", root / "mrz_crnn/1.5.0/model.onnx")
     (root / "manifest.json").write_text(json.dumps({"mrz_crnn": _manifest_entry()}))
-    (root / "mrz_crnn/1.4.0/metadata.json").write_text(json.dumps({**metadata, "version": "8.8.8-meta"}))
+    (root / "mrz_crnn/1.5.0/metadata.json").write_text(json.dumps({**metadata, "version": "8.8.8-meta"}))
     monkeypatch.setattr(settings, "manifest_path", root / "manifest.json")
     runtime.reset_mrz_runtime()
     assert repo.current_model_pins()[MRZ_PIN_NAME] == "8.8.8-meta"
@@ -92,15 +92,15 @@ def test_health_reports_mrz_live_with_installed_version(fresh_runtime):
         body = client.get("/api/health").json()
     mrz = next(n for n in body["nodes"] if n["node"] == "mrz")
     assert mrz["status"] == "live"
-    assert mrz["modelPin"] == "mrz-crnn-slot 1.4.0" and mrz["modelVersion"] == "1.4.0"
+    assert mrz["modelPin"] == "mrz-crnn-slot 1.5.0" and mrz["modelVersion"] == "1.5.0"
 
 
 @needs_weights
 def test_corrupted_model_file_raises_on_load(tmp_path):
     root = tmp_path / "models"
-    (root / "mrz_crnn/1.4.0").mkdir(parents=True)
+    (root / "mrz_crnn/1.5.0").mkdir(parents=True)
     shutil.copy(MODELS / "manifest.json", root / "manifest.json")
-    weights = root / "mrz_crnn/1.4.0/model.onnx"
+    weights = root / "mrz_crnn/1.5.0/model.onnx"
     shutil.copy(INSTALLED / "model.onnx", weights)
     shutil.copy(INSTALLED / "metadata.json", weights.parent / "metadata.json")
     MRZReader(weights)  # intact: loads
@@ -121,7 +121,7 @@ def _page(band: np.ndarray) -> np.ndarray:
 def test_twelve_synthetic_documents_produce_signals_from_the_live_model(fresh_runtime):
     """Provenance, not accuracy: every one of the 12 documents goes through the
     real ONNX model and comes out with recoveryStats and MRZ signals pinned to
-    1.4.0. (Whether the readings are *right* is measured by measure_recovery.py;
+    1.5.0. (Whether the readings are *right* is measured by measure_recovery.py;
     see the B1g report for what the page path currently does to them.)"""
     from app.pipeline.analyse import run_analysis
 
@@ -136,7 +136,7 @@ def test_twelve_synthetic_documents_produce_signals_from_the_live_model(fresh_ru
     results = asyncio.run(run_all())
     assert len(results) == 12
     for res in results:
-        assert res.mrz is not None and res.mrz.model_pin == "mrz-crnn-slot 1.4.0"
+        assert res.mrz is not None and res.mrz.model_pin == "mrz-crnn-slot 1.5.0"
         stats = res.mrz.recovery_stats
         assert stats is not None and stats.total_characters == 88
         codes = {s.signal_id for f in res.findings for s in f.signals}

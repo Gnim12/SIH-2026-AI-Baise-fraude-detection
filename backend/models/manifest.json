@@ -7,11 +7,11 @@
     "version": "buffalo_l"
   },
   "mrz_crnn": {
-    "note": "Trained fixed-slot CRNN (mrz-crnn-slot). metadata.json beside the weights is the source of the pin version.",
-    "path": "models/mrz_crnn/1.4.0/model.onnx",
+    "note": "Trained fixed-slot CRNN (mrz-crnn-slot), fixed-pitch unclipped render. metadata.json beside the weights is the source of the pin version. 1.4.0 stays on disk under models/mrz_crnn/1.4.0/ as the comparison baseline (clipped-tail training set, not for production).",
+    "path": "models/mrz_crnn/1.5.0/model.onnx",
     "placeholder": false,
-    "sha256": "9084b6285e23253bdd88a3381bdaf50ec90bc2b285dbfa6ae90ac8218db1e7a8",
-    "version": "1.4.0"
+    "sha256": "e556d19ae17de63317cb76fec4b8ea062b790364e81d33c3933ed89c199ff24d",
+    "version": "1.5.0"
   },
   "pad_minifas": {
     "note": "presentation-attack detection is part of the face branch, stub until M4.",
