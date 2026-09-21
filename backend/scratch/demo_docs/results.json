@@ -1,0 +1,204 @@
+[
+  {
+    "file": "demo_clean_1_okonkwo.png",
+    "sessionId": "98d8dcd1-3221-4004-87bc-c248c0b14536",
+    "mrz_chars_wrong": 0,
+    "verdict": "cleared",
+    "reason": "No adverse findings from the checks this build can perform (MRZ decode, VIZ decode, MRZ\u2194VIZ cross-check). Wave 2 checks were not run -- see coverage.",
+    "signals": [
+      "VIZ_LOW_CONFIDENCE"
+    ],
+    "finding_titles": [
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence"
+    ],
+    "recovery_stats": {
+      "totalCharacters": 88,
+      "recovered": 0,
+      "suspect": 0,
+      "meanRawConfidence": null,
+      "meanRecoveredConfidence": null
+    },
+    "cross_check": [
+      [
+        "birth_date",
+        "match"
+      ],
+      [
+        "expiry_date",
+        "match"
+      ],
+      [
+        "doc_number",
+        "match"
+      ],
+      [
+        "surname",
+        "match"
+      ],
+      [
+        "nationality",
+        "match"
+      ],
+      [
+        "sex",
+        "match"
+      ]
+    ],
+    "mrz_surname": "OKONKWO"
+  },
+  {
+    "file": "demo_clean_2_lindqvist.png",
+    "sessionId": "16745c0e-1f7d-46ed-8244-32a42d7e322c",
+    "mrz_chars_wrong": 0,
+    "verdict": "cleared",
+    "reason": "No adverse findings from the checks this build can perform (MRZ decode, VIZ decode, MRZ\u2194VIZ cross-check). Wave 2 checks were not run -- see coverage.",
+    "signals": [
+      "VIZ_LOW_CONFIDENCE"
+    ],
+    "finding_titles": [
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence"
+    ],
+    "recovery_stats": {
+      "totalCharacters": 88,
+      "recovered": 0,
+      "suspect": 0,
+      "meanRawConfidence": null,
+      "meanRecoveredConfidence": null
+    },
+    "cross_check": [
+      [
+        "birth_date",
+        "match"
+      ],
+      [
+        "expiry_date",
+        "match"
+      ],
+      [
+        "doc_number",
+        "match"
+      ],
+      [
+        "surname",
+        "match"
+      ],
+      [
+        "nationality",
+        "match"
+      ],
+      [
+        "sex",
+        "match"
+      ]
+    ],
+    "mrz_surname": "LINDQVIST"
+  },
+  {
+    "file": "demo_clean_3_tanaka.png",
+    "sessionId": "a4eb5aaf-e961-4f17-a906-c39afb160b43",
+    "mrz_chars_wrong": 0,
+    "verdict": "cleared",
+    "reason": "No adverse findings from the checks this build can perform (MRZ decode, VIZ decode, MRZ\u2194VIZ cross-check). Wave 2 checks were not run -- see coverage.",
+    "signals": [
+      "VIZ_LOW_CONFIDENCE"
+    ],
+    "finding_titles": [
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence"
+    ],
+    "recovery_stats": {
+      "totalCharacters": 88,
+      "recovered": 0,
+      "suspect": 0,
+      "meanRawConfidence": null,
+      "meanRecoveredConfidence": null
+    },
+    "cross_check": [
+      [
+        "birth_date",
+        "match"
+      ],
+      [
+        "expiry_date",
+        "match"
+      ],
+      [
+        "doc_number",
+        "match"
+      ],
+      [
+        "surname",
+        "match"
+      ],
+      [
+        "nationality",
+        "match"
+      ],
+      [
+        "sex",
+        "match"
+      ]
+    ],
+    "mrz_surname": "TANAKA"
+  },
+  {
+    "file": "demo_ALTERED_surname.png",
+    "sessionId": "8a2609ae-3ca4-4636-a8b0-71d72272627f",
+    "mrz_chars_wrong": 0,
+    "verdict": "review-required",
+    "reason": "RECAPTURE_SUGGESTED: the printed and machine-readable data disagree, or a check digit failed to validate. Glare, blur and folds cause this far more often than a genuine document defect; recapture and re-run before treating this as anything else.",
+    "signals": [
+      "MRZ_VIZ_MISMATCH_SURNAME",
+      "VIZ_LOW_CONFIDENCE"
+    ],
+    "finding_titles": [
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Viz Low Confidence",
+      "Printed and machine-readable data disagree"
+    ],
+    "recovery_stats": {
+      "totalCharacters": 88,
+      "recovered": 0,
+      "suspect": 0,
+      "meanRawConfidence": null,
+      "meanRecoveredConfidence": null
+    },
+    "cross_check": [
+      [
+        "birth_date",
+        "match"
+      ],
+      [
+        "expiry_date",
+        "match"
+      ],
+      [
+        "doc_number",
+        "match"
+      ],
+      [
+        "surname",
+        "mismatch"
+      ],
+      [
+        "nationality",
+        "match"
+      ],
+      [
+        "sex",
+        "match"
+      ]
+    ],
+    "mrz_surname": "OKONKWO"
+  }
+]

@@ -1,0 +1,128 @@
+diff --git a/src/components/pipeline/RunLog.tsx b/src/components/pipeline/RunLog.tsx
+index a6c6813..4402b44 100644
+--- a/src/components/pipeline/RunLog.tsx
++++ b/src/components/pipeline/RunLog.tsx
+@@ -1,10 +1,27 @@
+-import { useEffect, useRef } from 'react';
+-import { MODEL_PINS } from '../../lib/decision/officerContext';
++import { useEffect, useRef, useState } from 'react';
++import { fetchNodeHealth } from '../../lib/data/source';
+ import type { RunLogEntry } from '../../stores/pipelineRun';
+ 
+-const MODEL_VERSIONS = Object.entries(MODEL_PINS)
+-  .map(([model, version]) => `${model} ${version}`)
+-  .join(' · ');
++/** Model pins actually running, from GET /api/health. null until known or if unavailable. */
++function useRunningModelPins(): string | null {
++  const [pins, setPins] = useState<string | null>(null);
++  useEffect(() => {
++    let cancelled = false;
++    fetchNodeHealth()
++      .then((nodes) => {
++        if (cancelled) return;
++        const list = nodes.map((n) => n.pin).filter((p): p is string => !!p);
++        setPins(list.length > 0 ? list.join(' · ') : null);
++      })
++      .catch(() => {
++        if (!cancelled) setPins(null);
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, []);
++  return pins;
++}
+ 
+ function relativeSeconds(startedAtMs: number, atIso: string): string {
+   const deltaMs = new Date(atIso).getTime() - startedAtMs;
+@@ -19,6 +36,7 @@ interface RunLogProps {
+ 
+ export function RunLog({ entries, startedAtMs, totalStages }: RunLogProps) {
+   const listRef = useRef<HTMLUListElement>(null);
++  const modelPins = useRunningModelPins();
+   const settledCount = new Set(
+     entries.filter((e) => e.outcome !== 'started').map((e) => e.stageId),
+   ).size;
+@@ -74,7 +92,7 @@ export function RunLog({ entries, startedAtMs, totalStages }: RunLogProps) {
+         <p className="text-[12px] text-slate-500">
+           This log is written to the tamper-evident audit chain with the model versions in force.
+         </p>
+-        <p className="mt-2 font-mono text-[11px] text-slate-400">{MODEL_VERSIONS}</p>
++        {modelPins && <p className="mt-2 font-mono text-[11px] text-slate-400">{modelPins}</p>}
+       </div>
+     </div>
+   );
+diff --git a/src/lib/decision/officerContext.ts b/src/lib/decision/officerContext.ts
+index 5110def..6a3c79a 100644
+--- a/src/lib/decision/officerContext.ts
++++ b/src/lib/decision/officerContext.ts
+@@ -4,7 +4,7 @@ export const CURRENT_OFFICER_NAME = 'Officer 1';
+ export const CURRENT_TERMINAL_ID = 'TERM-07';
+ 
+ export const MODEL_PINS: Record<string, string> = {
+-  'mrz-crnn-slot': '1.4.0',
++  'mrz-crnn-slot': '1.5.0',
+   rapidocr: '1.3.1',
+   resnet: '0.7.2',
+   arcface: '1.1.0',
+diff --git a/src/mocks/results.ts b/src/mocks/results.ts
+index acd62e7..7f5e67c 100644
+--- a/src/mocks/results.ts
++++ b/src/mocks/results.ts
+@@ -76,7 +76,7 @@ function buildMrz(options: { failedRange?: [number, number]; findingId?: string
+       { field: 'Personal number', value: 'ZE184226B', checkDigitState: 'valid' },
+     ],
+     compositeCheckDigit: { value: '0', state: 'valid' },
+-    modelPin: 'mrz-crnn-slot 1.4.0',
++    modelPin: 'mrz-crnn-slot 1.5.0',
+     recoveredCharacters: [
+       { lineIndex: 1, position: RECOVERED_INDEX_LINE_2, raw: 'O', recovered: '0', rawConfidence: 0.41, recoveredConfidence: 0.38 },
+     ],
+@@ -211,7 +211,7 @@ function mrzChecksumFinding(): Finding {
+         label: 'Character recovered via ICAO check digit',
+         detail: "Line 2, position 16 read as '0'; the recognition network's next-best hypothesis was 'O'.",
+         emittedAt: '2026-09-15T10:11:40.000Z',
+-        modelPin: 'mrz-crnn-slot 1.4.0',
++        modelPin: 'mrz-crnn-slot 1.5.0',
+       },
+     ],
+   };
+diff --git a/src/mocks/dashboard.ts b/src/mocks/dashboard.ts
+index 796a21d..97951c3 100644
+--- a/src/mocks/dashboard.ts
++++ b/src/mocks/dashboard.ts
+@@ -13,7 +13,7 @@ export const SEED_HEALTH_RESPONSE = {
+   nodes: [
+     {
+       node: 'mrz', status: 'live', detail: 'MRZ recogniser weights loaded and verified.',
+-      modelPin: 'mrz-crnn-slot 1.4.0', modelVersion: '1.4.0',
++      modelPin: 'mrz-crnn-slot 1.5.0', modelVersion: '1.5.0',
+     },
+     { node: 'viz', status: 'ok', detail: 'RapidOCR (PP-OCRv5, ONNX Runtime) is live.', modelPin: 'v5' },
+     { node: 'tamper', status: 'unavailable', detail: 'Tamper forensics is not implemented in this build.', modelPin: null },
+diff --git a/src/lib/data/source.test.ts b/src/lib/data/source.test.ts
+index 73db4c7..0ad8c8e 100644
+--- a/src/lib/data/source.test.ts
++++ b/src/lib/data/source.test.ts
+@@ -33,7 +33,7 @@ describe('data source — flag off', () => {
+   it('reports node health from the seeded backend-shaped fixture, with no live node it does not have', async () => {
+     const source = await loadSource('false');
+     const nodes = await source.fetchNodeHealth();
+-    expect(nodes.find((n) => n.id === 'mrz')).toMatchObject({ state: 'live', pin: 'mrz-crnn-slot 1.4.0' });
++    expect(nodes.find((n) => n.id === 'mrz')).toMatchObject({ state: 'live', pin: 'mrz-crnn-slot 1.5.0' });
+     expect(nodes.find((n) => n.id === 'identity-graph')?.state).toBe('unavailable');
+   });
+ 
+diff --git a/src/screens/SettingsScreen.test.tsx b/src/screens/SettingsScreen.test.tsx
+index 4447d50..69cb042 100644
+--- a/src/screens/SettingsScreen.test.tsx
++++ b/src/screens/SettingsScreen.test.tsx
+@@ -118,7 +118,7 @@ describe('SettingsScreen — model versions', () => {
+   it('every node the health source returns renders with its pin and state text', async () => {
+     renderScreen();
+     expect(await screen.findByText('MRZ reader')).toBeInTheDocument();
+-    expect(screen.getByText('mrz-crnn-slot 1.4.0')).toBeInTheDocument();
++    expect(screen.getByText('mrz-crnn-slot 1.5.0')).toBeInTheDocument();
+     expect(screen.getByText('VIZ reader')).toBeInTheDocument();
+     expect(screen.getByText('Tamper forensics')).toBeInTheDocument();
+     expect(screen.getByText('Face verification')).toBeInTheDocument();
