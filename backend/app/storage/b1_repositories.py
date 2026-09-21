@@ -234,13 +234,18 @@ async def settle_run(db: AsyncSession, run_id: str, session_id: str, result: Scr
     run.status = "settled"
     run.result_json = result.model_dump(mode="json", by_alias=True)
 
-    signal_row_id_by_signal_id: dict[str, str] = {}
+    # Wire signals carry no per-instance id: `signal_id` is the signal *code*
+    # (e.g. VIZ_FIELD_NOT_READABLE) and repeats within and across findings.
+    # Every emitted signal instance gets its own b1_signal row, and findings
+    # link to those specific row ids -- never resolve a row by code. The same
+    # instance appearing under two findings shares one row (keyed by identity).
+    signal_row_id_by_instance: dict[int, str] = {}
     for finding in result.findings:
         for signal in finding.signals:
-            if signal.signal_id in signal_row_id_by_signal_id:
+            if id(signal) in signal_row_id_by_instance:
                 continue
             row_id = str(uuid.uuid4())
-            signal_row_id_by_signal_id[signal.signal_id] = row_id
+            signal_row_id_by_instance[id(signal)] = row_id
             db.add(B1Signal(
                 id=row_id, run_id=run_id, stage_id="", signal_id=signal.signal_id,
                 modality=signal.modality.value, label=signal.label, detail=signal.detail,
@@ -264,11 +269,14 @@ async def settle_run(db: AsyncSession, run_id: str, session_id: str, result: Scr
     # foreign-key check against rows added earlier in this same session.
     await db.flush()
 
+    # Guard: the join table's PK is (finding_id, signal_id); dedupe pairs.
+    link_pairs: set[tuple[str, str]] = set()
     for finding, finding_row_id in zip(result.findings, finding_row_ids):
         for signal in finding.signals:
-            signal_row_id = signal_row_id_by_signal_id.get(signal.signal_id)
-            if signal_row_id is not None:
-                db.add(B1FindingSignal(finding_id=finding_row_id, signal_id=signal_row_id))
+            pair = (finding_row_id, signal_row_id_by_instance[id(signal)])
+            if pair not in link_pairs:
+                link_pairs.add(pair)
+                db.add(B1FindingSignal(finding_id=pair[0], signal_id=pair[1]))
 
     doc_number_raw = None
     if result.mrz is not None:
